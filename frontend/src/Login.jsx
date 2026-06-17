@@ -13,10 +13,12 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
+      const url = `${API}/token`;
+      console.log("🔍 Attempting login to:", url);  // <-- debug line
       const formData = new URLSearchParams();
       formData.append('username', email);
       formData.append('password', password);
-      const res = await fetch(`${API}/token`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData,
@@ -27,9 +29,10 @@ export default function Login() {
         return;
       }
       login(data.access_token);
-      window.location.href = '/'; // redirect to main app
+      window.location.href = '/';
     } catch (err) {
       setError('Network error. Please try again.');
+      console.error("Login error:", err);
     }
   };
 
