@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 import os
 import re
+from sqlalchemy.orm import Session  # <-- added
 
 # Correct imports from the backend package
 from backend import parser
