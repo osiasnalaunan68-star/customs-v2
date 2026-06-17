@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-
-const API = "https://customs-ph-webservice.onrender.com";
+import { API_BASE_URL } from './config';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,15 +12,10 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      const url = `${API}/token`;
-      console.log("🔍 Attempting login to:", url);  // <-- debug line
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-      const res = await fetch(url, {
+      const res = await fetch(`${API_BASE_URL}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData,
+        body: new URLSearchParams({ username: email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -32,7 +26,6 @@ export default function Login() {
       window.location.href = '/';
     } catch (err) {
       setError('Network error. Please try again.');
-      console.error("Login error:", err);
     }
   };
 
@@ -51,9 +44,7 @@ export default function Login() {
         </div>
         <button type="submit" style={{ width: '100%', background: '#C8972B', color: '#0A1628', padding: 12, fontWeight: 600, borderRadius: 6 }}>Log In</button>
       </form>
-      <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>
-        Don't have an account? <a href="/register" style={{ color: '#C8972B' }}>Register</a>
-      </p>
+      <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>Don't have an account? <a href="/register" style={{ color: '#C8972B' }}>Register</a></p>
     </div>
   );
 }

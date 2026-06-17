@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-
-const API = "https://customs-ph-webservice.onrender.com";
+import { API_BASE_URL } from './config';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -23,7 +22,7 @@ export default function Register() {
       return;
     }
     try {
-      const res = await fetch(`${API}/register`, {
+      const res = await fetch(`${API_BASE_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -35,13 +34,10 @@ export default function Register() {
       }
       setSuccess(true);
       // Auto-login after registration
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-      const tokenRes = await fetch(`${API}/token`, {
+      const tokenRes = await fetch(`${API_BASE_URL}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData,
+        body: new URLSearchParams({ username: email, password }),
       });
       const tokenData = await tokenRes.json();
       if (tokenRes.ok) {
@@ -73,9 +69,7 @@ export default function Register() {
         </div>
         <button type="submit" style={{ width: '100%', background: '#1B4F9B', color: '#F5F7FA', padding: 12, fontWeight: 600, borderRadius: 6 }}>Register</button>
       </form>
-      <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>
-        Already have an account? <a href="/login" style={{ color: '#C8972B' }}>Login</a>
-      </p>
+      <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>Already have an account? <a href="/login" style={{ color: '#C8972B' }}>Login</a></p>
     </div>
   );
 }

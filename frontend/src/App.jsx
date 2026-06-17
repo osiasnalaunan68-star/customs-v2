@@ -3,8 +3,7 @@ import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-
-const API = "https://customs-ph-webservice.onrender.com";
+import { API_BASE_URL } from './config';
 
 // ─── THEME & DESIGN SYSTEM ───────────────────────────────────────────────
 const C = {
@@ -82,7 +81,7 @@ function SpeciesBadge({ species }) {
   );
 }
 
-// ─── Main App Content (requires authentication) ──────────────────────────
+// ─── Main App Content ──────────────────────────────────────────────────
 function AppContent() {
   const { token, logout } = useAuth();
   const [tab, setTab] = useState("calc");
@@ -103,7 +102,7 @@ function AppContent() {
     setTab("calc");
   };
 
-  // ─── HSLookup with Hierarchical Path, Species Badge, Indentation ──────
+  // ─── HSLookup ────────────────────────────────────────────────────────
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [speciesFilter, setSpeciesFilter] = useState("");
@@ -112,11 +111,10 @@ function AppContent() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    // Fetch species list on mount
     useEffect(() => {
       const fetchSpecies = async () => {
         try {
-          const res = await fetch(`${API}/species`, {
+          const res = await fetch(`${API_BASE_URL}/species`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           const data = await res.json();
@@ -135,7 +133,7 @@ function AppContent() {
           limit: 25,
         });
         if (speciesFilter) params.append('species', speciesFilter);
-        const res = await fetch(`${API}/search?${params}`, {
+        const res = await fetch(`${API_BASE_URL}/search?${params}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -148,7 +146,6 @@ function AppContent() {
       setLoading(false);
     };
 
-    // Group results by heading (first 4 digits) for indentation
     const grouped = results.reduce((acc, item) => {
       const heading = item.code.slice(0, 4);
       if (!acc[heading]) acc[heading] = [];
@@ -202,7 +199,6 @@ function AppContent() {
                 </thead>
                 <tbody>
                   {Object.entries(grouped).map(([heading, items]) => {
-                    // Heading row (indent 0)
                     const firstItem = items[0];
                     const headingDesc = firstItem.hierarchical_path.split('>')[1]?.trim() || heading;
                     return (
@@ -215,7 +211,7 @@ function AppContent() {
                         {items.map((item, idx) => {
                           const hasOverride = settings.customOverrides[item.code] !== undefined;
                           const finalRate = hasOverride ? settings.customOverrides[item.code] : item.rate_2024;
-                          const indent = item.code.length > 4 ? 20 : 0; // indent subheadings
+                          const indent = item.code.length > 4 ? 20 : 0;
                           return (
                             <tr key={idx} style={{ borderBottom: `1px solid ${C.border}20` }}>
                               <td className="mono" style={{ padding: "10px 14px", paddingLeft: indent + 14, color: C.goldL, fontWeight: 600 }}>
@@ -256,7 +252,7 @@ function AppContent() {
     );
   }
 
-  // ─── Interactive Calculator (updated to show hierarchical path and species) ──
+  // ─── Interactive Calculator ──────────────────────────────────────────
   function InteractiveCalc() {
     const [cifUsd, setCifUsd] = useState("10000");
     const [dutyRate, setDutyRate] = useState("5");
@@ -346,7 +342,7 @@ function AppContent() {
     );
   }
 
-  // ─── AI Classifier (enhanced) ──────────────────────────────────────────
+  // ─── AI Classifier ────────────────────────────────────────────────────
   function AIClassifier() {
     const [desc, setDesc] = useState("");
     const [result, setResult] = useState(null);
@@ -356,7 +352,7 @@ function AppContent() {
       if (!desc.trim()) return;
       setLoading(true);
       try {
-        const res = await fetch(`${API}/classify`, {
+        const res = await fetch(`${API_BASE_URL}/classify`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -396,7 +392,7 @@ function AppContent() {
     );
   }
 
-  // ─── Settings (unchanged) ──────────────────────────────────────────────
+  // ─── Settings ──────────────────────────────────────────────────────────
   function CustomsSettings() {
     const [vat, setVat] = useState(settings.vatRate);
     const [proc, setProc] = useState(settings.bocProcessingFee);
@@ -507,7 +503,7 @@ function AppContent() {
   );
 }
 
-// ─── Root Router with Auth ────────────────────────────────────────────────
+// ─── Root Router ──────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
