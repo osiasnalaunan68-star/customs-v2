@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from models import User, SessionLocal
+from backend.models import User, SessionLocal
 
-SECRET_KEY = "your-very-secret-key-change-in-production"  # TODO: move to env
+SECRET_KEY = "your-very-secret-key-change-in-production"  # TODO: use env variable
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

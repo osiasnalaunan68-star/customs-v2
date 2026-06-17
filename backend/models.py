@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 Base = declarative_base()
 
@@ -18,8 +19,8 @@ class User(Base):
     def hash_password(cls, plain_password):
         return generate_password_hash(plain_password)
 
-# Database setup
-DATABASE_URL = "sqlite:///./customs.db"
+db_path = os.path.join(os.path.dirname(__file__), "customs.db")
+DATABASE_URL = f"sqlite:///{db_path}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)

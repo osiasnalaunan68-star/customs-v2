@@ -3,16 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-import parser
 import os
-from models import User, SessionLocal   # <-- removed pwd_context
-from auth import create_access_token, get_current_user, get_db
-from sqlalchemy.orm import Session
 import re
+
+# Correct imports from the backend package
+from backend import parser
+from backend.auth import create_access_token, get_current_user, get_db
+from backend.models import User, SessionLocal
 
 app = FastAPI(title="PH Customs Broker System API")
 
-# CORS – restrict in production
+# CORS – allow all origins for now
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,13 +25,13 @@ app.add_middleware(
 # ─── Global Data ──────────────────────────────────────────────────────────
 TARIFF_DATABASE = []
 CHAPTER_TITLES = {}
-HEADING_DESCRIPTIONS = {}   # 4-digit code -> description
+HEADING_DESCRIPTIONS = {}
 SPECIES_MAP = {
     "0101": {"emoji": "🐴", "name": "KABAYO/ASNO"},
     "0102": {"emoji": "🐂", "name": "BAKA/KALABAW"},
 }
 
-TARIFF_FILE = "ph_tariff_organized.txt"
+TARIFF_FILE = "backend/ph_tariff_organized.txt"
 if os.path.exists(TARIFF_FILE):
     print("Parsing tariff database...")
     TARIFF_DATABASE = parser.parse_tariff(TARIFF_FILE)
@@ -192,7 +193,6 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         result["species"] = get_species_info(code)
     return result
 
-# Root endpoint (public)
 @app.get("/")
 def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
