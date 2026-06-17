@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 
-const API = 'http://localhost:8000';
+const API = "https://customs-ph-webservice.onrender.com";
 
 export default function Register() {
   const [email, setEmail] = useState('');
