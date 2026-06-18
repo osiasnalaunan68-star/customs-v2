@@ -276,27 +276,33 @@ function AppContent() {
     }, [sharedCodeData]);
 
     // Live exchange rate fetch
-        const fetchLiveRate = async () => {
+        
+    const fetchLiveRate = async () => {
+      console.log("🔍 Fetching live rate using API Ninjas key:", API_NINJAS_KEY ? "present" : "MISSING!");
       setFetchingRate(true);
       try {
         // Primary: API Ninjas
-        const res = await fetch(
-          `https://api.api-ninjas.com/v1/convertcurrency?have=USD&want=PHP&amount=1`,
-          { headers: { "X-Api-Key": API_NINJAS_KEY } }
-        );
-        if (!res.ok) throw new Error(`API Ninjas error: ${res.status}`);
+        const url = `https://api.api-ninjas.com/v1/convertcurrency?have=USD&want=PHP&amount=1`;
+        console.log("📡 Calling Ninjas:", url);
+        const res = await fetch(url, {
+          headers: { "X-Api-Key": API_NINJAS_KEY }
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`API Ninjas error (${res.status}): ${errText}`);
+        }
         const data = await res.json();
         if (data && data.new_amount) {
           const phpRate = parseFloat(data.new_amount);
           if (isNaN(phpRate) || phpRate <= 0) throw new Error("Invalid rate");
           setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
-          alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD`);
+          alert(`✅ Exchange rate updated to ₱${phpRate.toFixed(2)} per USD (API Ninjas)`);
           setFetchingRate(false);
           return;
         }
         throw new Error("Unexpected response from API Ninjas");
       } catch (err) {
-        console.warn("API Ninjas failed, using fallback", err);
+        console.warn("⚠️ API Ninjas failed, using fallback", err);
         // Fallback: exchangerate-api.com
         try {
           const fallback = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
@@ -305,16 +311,17 @@ function AppContent() {
           if (fallbackData.rates && fallbackData.rates.PHP) {
             const phpRate = fallbackData.rates.PHP;
             setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
-            alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD (via backup)`);
+            alert(`💡 Exchange rate updated to ₱${phpRate.toFixed(2)} per USD (fallback)`);
           } else {
             throw new Error("Fallback rate missing");
           }
         } catch (fallbackErr) {
-          alert(`Could not fetch live rate: ${fallbackErr.message}. Please check your API key.`);
+          alert(`❌ Could not fetch live rate: ${fallbackErr.message}. Check your API key or network.`);
         }
       }
       setFetchingRate(false);
-    };;
+    };
+;;
 
     const currentExRate = parseFloat(settings.exchangeRate) || 1;
     const totalCifPhp   = (parseFloat(cifUsd) || 0) * currentExRate;
