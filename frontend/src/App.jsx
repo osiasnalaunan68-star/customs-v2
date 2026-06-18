@@ -276,27 +276,45 @@ function AppContent() {
     }, [sharedCodeData]);
 
     // Live exchange rate fetch
-    const fetchLiveRate = async () => {
+        const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
+        // Primary: API Ninjas
         const res = await fetch(
           `https://api.api-ninjas.com/v1/convertcurrency?have=USD&want=PHP&amount=1`,
           { headers: { "X-Api-Key": API_NINJAS_KEY } }
         );
-        if (!res.ok) throw new Error("API error");
+        if (!res.ok) throw new Error(`API Ninjas error: ${res.status}`);
         const data = await res.json();
-        if (data.new_amount) {
-          const phpRate = data.new_amount;
+        if (data && data.new_amount) {
+          const phpRate = parseFloat(data.new_amount);
+          if (isNaN(phpRate) || phpRate <= 0) throw new Error("Invalid rate");
           setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
           alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD`);
-        } else {
-          alert("Unexpected response format");
+          setFetchingRate(false);
+          return;
         }
+        throw new Error("Unexpected response from API Ninjas");
       } catch (err) {
-        alert("Could not fetch rate. Please check your API key or try again later.");
+        console.warn("API Ninjas failed, using fallback", err);
+        // Fallback: exchangerate-api.com
+        try {
+          const fallback = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          if (!fallback.ok) throw new Error("Fallback API error");
+          const fallbackData = await fallback.json();
+          if (fallbackData.rates && fallbackData.rates.PHP) {
+            const phpRate = fallbackData.rates.PHP;
+            setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
+            alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD (via backup)`);
+          } else {
+            throw new Error("Fallback rate missing");
+          }
+        } catch (fallbackErr) {
+          alert(`Could not fetch live rate: ${fallbackErr.message}. Please check your API key.`);
+        }
       }
       setFetchingRate(false);
-    };
+    };;
 
     const currentExRate = parseFloat(settings.exchangeRate) || 1;
     const totalCifPhp   = (parseFloat(cifUsd) || 0) * currentExRate;
