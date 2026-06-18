@@ -549,6 +549,7 @@ function AppContent() {
   }
 
   // ─── Settings ──────────────────────────────────────────────────────────
+  
   function CustomsSettings() {
     const [vat, setVat] = useState(settings.vatRate);
     const [proc, setProc] = useState(settings.bocProcessingFee);
@@ -556,6 +557,8 @@ function AppContent() {
     const [ex, setEx] = useState(settings.exchangeRate);
     const [ovCode, setOvCode] = useState("");
     const [ovRate, setOvRate] = useState("");
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingHsCode, setEditingHsCode] = useState("");
 
     const saveGlobalSettings = () => {
       setSettings(p => ({
@@ -568,10 +571,57 @@ function AppContent() {
       alert("Settings saved!");
     };
 
-    const addOverride = () => {
+    const handleOverrideSubmit = () => {
       if (!ovCode.trim()) return;
-      setSettings(p => ({ ...p, customOverrides: { ...p.customOverrides, [ovCode.trim()]: parseFloat(ovRate) || 0 } }));
-      setOvCode(""); setOvRate("");
+      const code = ovCode.trim();
+      const rate = parseFloat(ovRate) || 0;
+
+      if (isEditing) {
+        // Update existing override
+        setSettings(p => {
+          const newOverrides = { ...p.customOverrides };
+          // Remove old entry if it exists
+          delete newOverrides[editingHsCode];
+          newOverrides[code] = rate;
+          return { ...p, customOverrides: newOverrides };
+        });
+        setIsEditing(false);
+        setEditingHsCode("");
+        setOvCode("");
+        setOvRate("");
+      } else {
+        // Add new override
+        setSettings(p => ({
+          ...p,
+          customOverrides: { ...p.customOverrides, [code]: rate }
+        }));
+        setOvCode("");
+        setOvRate("");
+      }
+    };
+
+    const handleEditOverride = (hsCode, rate) => {
+      setOvCode(hsCode);
+      setOvRate(String(rate));
+      setIsEditing(true);
+      setEditingHsCode(hsCode);
+    };
+
+    const handleDeleteOverride = (hsCode) => {
+      if (window.confirm(`Delete override for HS Code ${hsCode}?`)) {
+        setSettings(p => {
+          const newOverrides = { ...p.customOverrides };
+          delete newOverrides[hsCode];
+          return { ...p, customOverrides: newOverrides };
+        });
+        // If the deleted item was being edited, clear the form
+        if (editingHsCode === hsCode) {
+          setIsEditing(false);
+          setEditingHsCode("");
+          setOvCode("");
+          setOvRate("");
+        }
+      }
     };
 
     return (
@@ -594,16 +644,112 @@ function AppContent() {
           <Card>
             <p style={{ fontWeight: 600, marginBottom: 14 }}>🏷️ EO Overrides</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input placeholder="HS Code" value={ovCode} onChange={e => setOvCode(e.target.value)} />
-              <input type="number" placeholder="Rate %" value={ovRate} onChange={e => setOvRate(e.target.value)} />
-              <button onClick={addOverride} style={{ background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>Add Override</button>
+              <input 
+                placeholder="AHTN Line Code (e.g., 1006.30.99)" 
+                value={ovCode} 
+                onChange={e => setOvCode(e.target.value)} 
+              />
+              <input 
+                type="number" 
+                placeholder="Override Tariff Rate (%)" 
+                value={ovRate} 
+                onChange={e => setOvRate(e.target.value)} 
+              />
+              <button 
+                onClick={handleOverrideSubmit} 
+                style={{ 
+                  background: isEditing ? C.gold : C.blue, 
+                  color: isEditing ? C.navy : C.white, 
+                  padding: 10, 
+                  borderRadius: 6, 
+                  fontWeight: 600 
+                }}
+              >
+                {isEditing ? "✏️ Update Override" : "➕ Add Override"}
+              </button>
+              {isEditing && (
+                <button 
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditingHsCode("");
+                    setOvCode("");
+                    setOvRate("");
+                  }} 
+                  style={{ 
+                    background: 'transparent', 
+                    color: C.muted, 
+                    border: `1px solid ${C.border}`, 
+                    padding: 6, 
+                    borderRadius: 4, 
+                    fontSize: 12 
+                  }}
+                >
+                  Cancel Edit
+                </button>
+              )}
               <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}55`, paddingTop: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.goldL }}>Active Overrides</span>
-                {Object.entries(settings.customOverrides).map(([c, r]) => (
-                  <div key={c} className="mono" style={{ display: "flex", justifyContent: "space-between", background: C.navyL, padding: "6px 10px", borderRadius: 4, fontSize: 12, marginTop: 4 }}>
-                    <span>{c}</span><span style={{ color: C.gold }}>{r}%</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.goldL, display: "block", marginBottom: 6 }}>
+                  Active Overrides {Object.keys(settings.customOverrides).length > 0 ? `(${Object.keys(settings.customOverrides).length})` : ""}
+                </span>
+                {Object.entries(settings.customOverrides).length === 0 ? (
+                  <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No overrides configured</p>
+                ) : (
+                  <div style={{ maxHeight: 200, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {Object.entries(settings.customOverrides).map(([code, rate]) => (
+                      <div 
+                        key={code} 
+                        style={{ 
+                          display: "flex", 
+                          justifyContent: "space-between", 
+                          alignItems: "center", 
+                          background: editingHsCode === code ? `${C.gold}22` : C.navyL, 
+                          padding: "6px 10px", 
+                          borderRadius: 4, 
+                          fontSize: 12,
+                          border: editingHsCode === code ? `1px solid ${C.gold}` : `1px solid ${C.border}55`
+                        }}
+                      >
+                        <div>
+                          <span className="mono" style={{ fontWeight: 600, color: C.goldL }}>{code}</span>
+                          <span style={{ color: C.muted, marginLeft: 8 }}>→</span>
+                          <span className="mono" style={{ color: C.white, marginLeft: 8 }}>{rate}%</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => handleEditOverride(code, rate)}
+                            style={{ 
+                              background: 'transparent', 
+                              color: C.gold, 
+                              border: 'none', 
+                              cursor: 'pointer', 
+                              padding: '2px 6px',
+                              borderRadius: 3,
+                              fontSize: 14
+                            }}
+                            title="Edit override"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOverride(code)}
+                            style={{ 
+                              background: 'transparent', 
+                              color: C.red, 
+                              border: 'none', 
+                              cursor: 'pointer', 
+                              padding: '2px 6px',
+                              borderRadius: 3,
+                              fontSize: 14
+                            }}
+                            title="Delete override"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </Card>
@@ -611,6 +757,7 @@ function AppContent() {
       </div>
     );
   }
+
 
   const TABS = [
     { id: "lookup",    label: "🔍 HS Lookup" },
