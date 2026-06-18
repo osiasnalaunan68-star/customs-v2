@@ -279,17 +279,21 @@ function AppContent() {
     const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
-        const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        const res = await fetch(
+          `https://api.api-ninjas.com/v1/convertcurrency?have=USD&want=PHP&amount=1`,
+          { headers: { "X-Api-Key": API_NINJAS_KEY } }
+        );
+        if (!res.ok) throw new Error("API error");
         const data = await res.json();
-        if (data.rates && data.rates.PHP) {
-          const phpRate = data.rates.PHP;
+        if (data.new_amount) {
+          const phpRate = data.new_amount;
           setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
           alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD`);
         } else {
-          alert('Could not fetch rate. Please try again.');
+          alert("Unexpected response format");
         }
       } catch (err) {
-        alert('Network error. Please try again.');
+        alert("Could not fetch rate. Please check your API key or try again later.");
       }
       setFetchingRate(false);
     };
