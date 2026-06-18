@@ -6,15 +6,15 @@ from typing import Optional
 import os
 import re
 from sqlalchemy.orm import Session
+import time
 
-# Correct imports from the backend package
 from backend import parser
 from backend.auth import create_access_token, get_current_user, get_db
 from backend.models import User, SessionLocal
 
 app = FastAPI(title="PH Customs Broker System API")
 
-# CORS – allow all origins for now
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,7 +45,7 @@ if os.path.exists(TARIFF_FILE):
         hd = item["code"][:4]
         if hd not in HEADING_DESCRIPTIONS:
             HEADING_DESCRIPTIONS[hd] = item["description"]
-    print(f"Loaded {len(TARIFF_DATABASE)} records, {len(CHAPTER_TITLES)} chapters, {len(HEADING_DESCRIPTIONS)} headings.")
+    print(f"Loaded {len(TARIFF_DATABASE)} records.")
 else:
     print("Warning: tariff file not found.")
 
@@ -74,15 +74,21 @@ class ClassificationRequest(BaseModel):
 # ─── Authentication Endpoints ─────────────────────────────────────────────
 @app.post("/register", status_code=201)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    # Check for existing email FIRST – prevents duplicates
     existing = db.query(User).filter(User.email == user.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-    hashed = User.hash_password(user.password)
-    new_user = User(email=user.email, hashed_password=hashed)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return {"message": "User created successfully"}
+    
+    try:
+        hashed = User.hash_password(user.password)
+        new_user = User(email=user.email, hashed_password=hashed)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {"message": "User created successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Registration failed")
 
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -164,7 +170,7 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "description": "Apples, fresh",
             "reasoning": "Identified as a fresh pomaceous fruit...",
             "duty_rate": 7.0,
-            "chapter": "Chapter 08: Edible Fruit and Nuts; Peel of Citrus Fruit or Melons",
+            "chapter": "Chapter 08: Edible Fruit and Nuts",
             "alternatives": [{"code": "0808.30.00", "description": "Pears, fresh"}]
         }
     elif "rice" in desc:
@@ -183,7 +189,7 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "hs_code": first_item["code"],
             "confidence": "45% (Low)",
             "description": first_item["description"],
-            "reasoning": "Matches general baseline description structure due to non-specific context.",
+            "reasoning": "Matches general baseline description structure.",
             "duty_rate": first_item["rate_2024"],
             "chapter": f"Chapter {first_item['chapter']:02d}",
             "alternatives": []

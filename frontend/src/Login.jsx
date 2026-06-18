@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { API_BASE_URL } from './config';
 
@@ -7,60 +7,209 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+
+  // Clean up any corrupted states on mount
+  useEffect(() => {
+    // Clear any guest or corrupted tokens
+    const token = localStorage.getItem('token');
+    if (token && token === 'guest' || token === 'null' || token === 'undefined') {
+      localStorage.removeItem('token');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
+
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
     try {
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+
       const res = await fetch(`${API_BASE_URL}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username: email, password }),
+        body: formData,
+        signal: AbortSignal.timeout(8000), // 8-second timeout
       });
+
       const data = await res.json();
+
       if (!res.ok) {
         setError(data.detail || 'Login failed');
+        setLoading(false);
         return;
       }
+
       login(data.access_token);
       window.location.href = '/';
     } catch (err) {
-      setError('Network error. Please try again.');
+      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+        setError('Connection timeout. Please try again.');
+      } else {
+        setError('Network error. Please check your connection.');
+      }
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: '80px auto', background: '#0D1F3C', padding: 30, borderRadius: 10, border: '1px solid #1E3A5F' }}>
-      <h2 style={{ color: '#C8972B' }}>Login to Customs Platform</h2>
-      {error && <p style={{ color: '#B03A2E', marginTop: 10 }}>{error}</p>}
-      <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
-        <div style={{ marginBottom: 15 }}>
-          <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={{ fontSize: 16 }} />
-        </div>
-        <div style={{ marginBottom: 15 }}>
-          <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Password</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      padding: '1rem',
+      background: 'var(--bg, #0A1628)'
+    }}>
+      <div style={{
+        maxWidth: 420,
+        width: '100%',
+        background: '#0D1F3C',
+        padding: '2rem',
+        borderRadius: 12,
+        border: '1px solid #1E3A5F',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+      }}>
+        <h2 style={{ color: '#C8972B', marginBottom: '0.5rem', fontSize: '1.8rem' }}>Welcome Back</h2>
+        <p style={{ color: '#8899AA', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Sign in to your account</p>
+
+        {error && (
+          <div style={{
+            background: '#B03A2E22',
+            border: '1px solid #B03A2E',
+            borderRadius: 6,
+            padding: '0.75rem',
+            marginBottom: '1rem',
+            color: '#B03A2E',
+            fontSize: '0.9rem'
+          }}>{error}</div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#8899AA', marginBottom: '0.35rem' }}>Email</label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               required
-              style={{ fontSize: 16 }}
+              style={{
+                width: '100%',
+                height: 44,
+                padding: '0 12px',
+                background: '#112240',
+                border: '1px solid #1E3A5F',
+                borderRadius: 6,
+                color: '#F5F7FA',
+                fontSize: '1rem',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              placeholder="you@example.com"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{ background: 'transparent', color: '#8899AA', border: '1px solid #1E3A5F', padding: '0 12px', borderRadius: 6, fontSize: 12 }}
-            >
-              {showPassword ? '🙈' : '👁️'}
-            </button>
           </div>
-        </div>
-        <button type="submit" style={{ width: '100%', background: '#C8972B', color: '#0A1628', padding: 12, fontWeight: 600, borderRadius: 6, fontSize: 16 }}>Log In</button>
-      </form>
-      <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>Don't have an account? <a href="/register" style={{ color: '#C8972B' }}>Register</a></p>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#8899AA', marginBottom: '0.35rem' }}>Password</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                style={{
+                  flex: 1,
+                  height: 44,
+                  padding: '0 12px',
+                  background: '#112240',
+                  border: '1px solid #1E3A5F',
+                  borderRadius: 6,
+                  color: '#F5F7FA',
+                  fontSize: '1rem',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                placeholder="Enter your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  height: 44,
+                  padding: '0 12px',
+                  background: 'transparent',
+                  color: '#8899AA',
+                  border: '1px solid #1E3A5F',
+                  borderRadius: 6,
+                  fontSize: '1.2rem',
+                  minWidth: 44
+                }}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: 48,
+              background: loading ? '#1E3A5F' : '#C8972B',
+              color: loading ? '#8899AA' : '#0A1628',
+              padding: '0 1rem',
+              fontWeight: 600,
+              borderRadius: 6,
+              fontSize: '1rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8
+            }}
+          >
+            {loading ? (
+              <>
+                <span style={{
+                  display: 'inline-block',
+                  width: 18,
+                  height: 18,
+                  border: '2px solid #8899AA',
+                  borderTop: '2px solid #C8972B',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite'
+                }} />
+                Processing...
+              </>
+            ) : (
+              'Log In'
+            )}
+          </button>
+        </form>
+
+        <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem', color: '#8899AA' }}>
+          Don't have an account? <a href="/register" style={{ color: '#C8972B', fontWeight: 500 }}>Create one</a>
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

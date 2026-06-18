@@ -499,6 +499,7 @@ function AppContent() {
   }
 
   // ─── AI Classifier ────────────────────────────────────────────────────
+  
   function AIClassifier() {
     const [desc, setDesc] = useState("");
     const [result, setResult] = useState(null);
@@ -506,6 +507,7 @@ function AppContent() {
 
     const runClassification = async () => {
       if (!desc.trim()) return;
+      if (!token) { alert("Please log in to use AI Classifier"); return; }
       setLoading(true);
       try {
         const res = await fetch(`${API_BASE_URL}/classify`, {
@@ -515,19 +517,78 @@ function AppContent() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ description: desc }),
+          signal: AbortSignal.timeout(10000),
         });
         const data = await res.json();
         setResult(data);
-      } catch (e) {}
+      } catch (err) {
+        if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+          alert("Request timed out. Please try again.");
+        } else {
+          alert("Network error. Please check your connection.");
+        }
+      }
       setLoading(false);
     };
 
     return (
       <Card>
         <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>Describe cargo for AI suggestion.</p>
-        <textarea rows={3} style={{ marginBottom: 12 }} value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g., fresh apples, rice, live horses..." />
-        <button onClick={runClassification} style={{ width: "100%", background: C.gold, color: C.navy, padding: 12, fontWeight: 600, borderRadius: 6 }}>
-          {loading ? "Processing..." : "Classify"}
+        <textarea
+          rows={4}
+          style={{
+            width: '100%',
+            padding: '12px 14px',
+            background: C.navyL,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            color: C.white,
+            fontSize: 14,
+            outline: 'none',
+            transition: 'border-color 0.2s',
+            resize: 'vertical',
+            fontFamily: 'Inter, sans-serif',
+            marginBottom: 12
+          }}
+          value={desc}
+          onChange={e => setDesc(e.target.value)}
+          placeholder="e.g., fresh apples, rice, live horses, frozen chicken..."
+        />
+        <button
+          onClick={runClassification}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: loading ? C.border : C.gold,
+            color: loading ? C.muted : C.navy,
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: '1rem',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8
+          }}
+        >
+          {loading ? (
+            <>
+              <span style={{
+                display: 'inline-block',
+                width: 18,
+                height: 18,
+                border: '2px solid #8899AA',
+                borderTop: '2px solid #C8972B',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              Processing...
+            </>
+          ) : (
+            '🤖 Classify'
+          )}
         </button>
         {result && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
@@ -544,9 +605,15 @@ function AppContent() {
             </button>
           </div>
         )}
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </Card>
     );
   }
+
 
   // ─── Settings ──────────────────────────────────────────────────────────
   
