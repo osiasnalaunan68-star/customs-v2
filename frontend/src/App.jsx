@@ -280,49 +280,28 @@ function AppContent() {
     
     
     
+    
     const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
-        // Fixer.io free tier only supports EUR as base
-        const res = await fetch(
-          `http://data.fixer.io/api/latest?access_key=${FIXER_API_KEY}&symbols=USD,PHP`
-        );
+        // Use exchangerate-api.com – free, no key required
+        const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (data.success && data.rates) {
-          const eurToUsd = data.rates.USD;
-          const eurToPhp = data.rates.PHP;
-          if (eurToUsd && eurToPhp) {
-            // Calculate PHP per USD
-            const rate = eurToPhp / eurToUsd;
-            setSettings(prev => ({ ...prev, exchangeRate: rate }));
-            alert(`✅ Live rate (Fixer.io): ₱${rate.toFixed(2)} per USD`);
-          } else {
-            throw new Error("Missing rate data");
-          }
+        if (data.rates && data.rates.PHP) {
+          const rate = data.rates.PHP;
+          setSettings(prev => ({ ...prev, exchangeRate: rate }));
+          alert(`✅ Live rate: ₱${rate.toFixed(2)} per USD`);
         } else {
-          throw new Error(data.error?.info || "Unexpected response");
+          throw new Error("Rate not found in response");
         }
       } catch (err) {
-        console.error("Fixer.io failed:", err);
-        // Fallback to exchangerate-api.com
-        try {
-          const fallback = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-          if (!fallback.ok) throw new Error(`HTTP ${fallback.status}`);
-          const data = await fallback.json();
-          if (data.rates && data.rates.PHP) {
-            const rate = data.rates.PHP;
-            setSettings(prev => ({ ...prev, exchangeRate: rate }));
-            alert(`💡 Live rate (backup): ₱${rate.toFixed(2)} per USD`);
-          } else {
-            throw new Error("Fallback rate missing");
-          }
-        } catch (fallbackErr) {
-          alert(`❌ Could not fetch live rate: ${fallbackErr.message}`);
-        }
+        console.error("Exchange rate API failed:", err);
+        alert(`❌ Could not fetch live rate: ${err.message}. Please try again later.`);
       }
       setFetchingRate(false);
     };
+;
 ;
 ;
 ;
