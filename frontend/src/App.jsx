@@ -254,6 +254,7 @@ function AppContent() {
   }
 
   // ─── Interactive Calculator with Edit buttons & Live Rate ──────────────
+  
   function InteractiveCalc() {
     const [cifUsd, setCifUsd] = useState("10000");
     const [dutyRate, setDutyRate] = useState("5");
@@ -261,8 +262,13 @@ function AppContent() {
     const [legalDesc, setLegalDesc] = useState("General baseline description");
     const [hierPath, setHierPath] = useState("");
     const [species, setSpecies] = useState(null);
-    const [calculated, setCalculated] = useState(false);
     const [fetchingRate, setFetchingRate] = useState(false);
+    const [expandedSections, setExpandedSections] = useState({
+      duty: false,
+      boc: false,
+      landed: false
+    });
+    const [showFormulas, setShowFormulas] = useState(true);
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -271,63 +277,25 @@ function AppContent() {
         setLegalDesc(sharedCodeData.desc || "Loaded from system");
         setHierPath(sharedCodeData.path || "");
         setSpecies(sharedCodeData.species || null);
-        setCalculated(false);
       }
     }, [sharedCodeData]);
 
-    // Live exchange rate fetch
-        
-    
-    
-    
-    
-    
     const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
-        // CurrencyFreaks API – updates every 5 minutes
-        const res = await fetch(
-          `https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${CURRENCYFREAKS_KEY}&base=USD&symbols=PHP`
-        );
+        const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.rates && data.rates.PHP) {
-          const rate = parseFloat(data.rates.PHP);
-          if (!isNaN(rate) && rate > 0) {
-            setSettings(prev => ({ ...prev, exchangeRate: rate }));
-            alert(`✅ Live rate (CurrencyFreaks): ₱${rate.toFixed(2)} per USD`);
-          } else {
-            throw new Error("Invalid rate received");
-          }
-        } else {
-          throw new Error(data.message || "Unexpected response");
+          const rate = data.rates.PHP;
+          setSettings(prev => ({ ...prev, exchangeRate: rate }));
+          alert(`✅ Live rate: ₱${rate.toFixed(2)} per USD`);
         }
       } catch (err) {
-        console.error("CurrencyFreaks failed:", err);
-        // Fallback to exchangerate-api.com
-        try {
-          const fallback = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-          if (!fallback.ok) throw new Error(`HTTP ${fallback.status}`);
-          const data = await fallback.json();
-          if (data.rates && data.rates.PHP) {
-            const rate = data.rates.PHP;
-            setSettings(prev => ({ ...prev, exchangeRate: rate }));
-            alert(`💡 Live rate (backup): ₱${rate.toFixed(2)} per USD`);
-          } else {
-            throw new Error("Fallback rate missing");
-          }
-        } catch (fallbackErr) {
-          alert(`❌ Could not fetch live rate: ${fallbackErr.message}`);
-        }
+        alert(`❌ Could not fetch live rate: ${err.message}`);
       }
       setFetchingRate(false);
     };
-;
-;
-;
-;
-;
-;;
 
     const currentExRate = parseFloat(settings.exchangeRate) || 1;
     const totalCifPhp   = (parseFloat(cifUsd) || 0) * currentExRate;
@@ -338,10 +306,16 @@ function AppContent() {
 
     const fmt = n => "₱ " + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const handleCalculate = () => setCalculated(true);
+    const toggleSection = (section) => {
+      setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+    };
+
+    // Helper to format numbers without currency for formula display
+    const fmtNum = n => n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* Left Column – Controls with live formulas */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -349,147 +323,204 @@ function AppContent() {
               <Pill color={C.green}>Real-Time</Pill>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* CIF with edit button */}
+              {/* CIF Value with formula */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>CIF Value (USD)</label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
                 </div>
                 <input type="number" value={cifUsd} onChange={e => setCifUsd(e.target.value)} />
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 {fmtNum(parseFloat(cifUsd) || 0)} USD × {currentExRate.toFixed(2)} = {fmt(totalCifPhp)}
+                </div>
               </div>
 
-              {/* Duty Rate with edit button */}
+              {/* Duty Rate with formula */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Duty Rate: <span className="mono" style={{ color: C.goldL }}>{dutyRate}%</span></label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
                 </div>
-                <input type="range" min="0" max="50" step="1" value={dutyRate} onChange={e => setDutyRate(e.target.value)} style={{ padding: 0, height: 6, cursor: "pointer" }} />
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="50" 
+                  step="1" 
+                  value={dutyRate} 
+                  onChange={e => setDutyRate(e.target.value)} 
+                  style={{ padding: 0, height: 6, cursor: "pointer" }} 
+                />
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 {fmt(totalCifPhp)} × {dutyRate}% = {fmt(computedDuty)}
+                </div>
               </div>
 
-              {/* Exchange Rate with edit + fetch live */}
+              {/* Exchange Rate with formula */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Exchange Rate (USD→PHP): <span className="mono" style={{ color: C.goldL }}>{currentExRate.toFixed(2)}</span></label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
-                  <button
-                    onClick={fetchLiveRate}
-                    disabled={fetchingRate}
-                    style={{ background: C.blue, color: C.white, padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}
-                  >
-                    {fetchingRate ? 'Loading...' : 'Fetch Live'}
-                  </button>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Exchange Rate: <span className="mono" style={{ color: C.goldL }}>{currentExRate.toFixed(2)}</span></label>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
+                  <button onClick={fetchLiveRate} disabled={fetchingRate} style={{ background: C.blue, color: C.white, padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{fetchingRate ? 'Loading...' : 'Fetch Live'}</button>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted }}>Last updated: {new Date().toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 1 USD = {currentExRate.toFixed(2)} PHP (live rate)
+                </div>
               </div>
 
-              {/* VAT with edit button */}
+              {/* VAT Rate with formula */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>VAT Rate: <span className="mono" style={{ color: C.goldL }}>{settings.vatRate}%</span></label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 {fmt(totalLanded)} × {settings.vatRate}% = {fmt(computedVat)}
                 </div>
               </div>
 
-              {/* BOC Processing Fee with edit button */}
+              {/* BOC Fees with formula */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>BOC Processing Fee: <span className="mono" style={{ color: C.goldL }}>₱{settings.bocProcessingFee}</span></label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>BOC Fee + Stamp</label>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
                 </div>
-              </div>
-
-              {/* Doc Stamp Fee with edit button */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Customs Doc Stamp: <span className="mono" style={{ color: C.goldL }}>₱{settings.docStampFee}</span></label>
-                  <button
-                    onClick={() => setTab("settings")}
-                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
-                    title="Edit in Settings"
-                  >
-                    ⚙️
-                  </button>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 ₱{settings.bocProcessingFee} (BOC) + ₱{settings.docStampFee} (Stamp) = {fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}
                 </div>
               </div>
 
               {/* AHTN Code display */}
               <div style={{ background: C.navyL, padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 11, color: C.muted }}>AHTN Code</span>
-                <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{hsCode}</span>
-                {species && <div style={{ marginTop: 4 }}><SpeciesBadge species={species} /></div>}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{hsCode}</span>
+                  {species && <SpeciesBadge species={species} />}
+                </div>
                 <p style={{ fontSize: 12, color: C.white, marginTop: 4, lineHeight: 1.3 }}>{legalDesc}</p>
-                {hierPath && <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hierPath}</p>}
+                {hierPath && (
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>
+                    {hierPath.split(' > ').map((part, i, arr) => (
+                      <span key={i}>
+                        {part}
+                        {i < arr.length - 1 && <span style={{ color: C.gold, margin: '0 4px' }}> › </span>}
+                      </span>
+                    ))}
+                  </p>
+                )}
               </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={handleCalculate} style={{ flex: 1, background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600 }}>
-                  Calculate
-                </button>
-                <button onClick={() => setTab("settings")} style={{ flex: 1, background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>
-                  Edit Settings
-                </button>
-              </div>
+              <button onClick={() => setTab("settings")} style={{ background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>⚙️ Edit Settings</button>
             </div>
           </Card>
         </div>
+
+        {/* Right Column – Duty & Tax Cascade with dropdowns */}
         <div>
           <Card style={{ position: "sticky", top: 20, borderLeft: `4px solid ${C.gold}` }}>
             <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: C.goldL }}>📊 Duty & Tax Cascade</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* CIF - always visible */}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
                 <span>CIF PHP</span>
                 <span className="mono">{fmt(totalCifPhp)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Customs Duty ({dutyRate}%)</span>
-                <span className="mono">{calculated ? fmt(computedDuty) : "—"}</span>
+
+              {/* Customs Duty - toggle */}
+              <div>
+                <div 
+                  style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" }}
+                  onClick={() => toggleSection('duty')}
+                >
+                  <span>Customs Duty ({dutyRate}%)</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="mono">{fmt(computedDuty)}</span>
+                    <span style={{ color: C.muted }}>{expandedSections.duty ? '−' : '+'}</span>
+                  </span>
+                </div>
+                {expandedSections.duty && (
+                  <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>CIF PHP × {dutyRate}%</span>
+                      <span className="mono">{fmt(computedDuty)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${C.border}55`, paddingBottom: 10 }}>
-                <span>BOC Fees + Stamp</span>
-                <span className="mono">{calculated ? fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee)) : "—"}</span>
+
+              {/* BOC Fees + Stamp - toggle */}
+              <div>
+                <div 
+                  style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer", borderBottom: `1px solid ${C.border}55` }}
+                  onClick={() => toggleSection('boc')}
+                >
+                  <span>BOC Fees + Stamp</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                    <span style={{ color: C.muted }}>{expandedSections.boc ? '−' : '+'}</span>
+                  </span>
+                </div>
+                {expandedSections.boc && (
+                  <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>Processing Fee</span>
+                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee))}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>Doc Stamp</span>
+                      <span className="mono">{fmt(parseFloat(settings.docStampFee))}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.gold, borderTop: `1px solid ${C.border}55`, paddingTop: 4, marginTop: 4 }}>
+                      <span>Total</span>
+                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", background: `${C.blue}15`, padding: "8px 10px", borderRadius: 5 }}>
-                <span style={{ color: C.muted }}>Landed Cost (VAT base)</span>
-                <span className="mono">{calculated ? fmt(totalLanded) : "—"}</span>
+
+              {/* Landed Cost - toggle */}
+              <div>
+                <div 
+                  style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: `${C.blue}15`, borderRadius: 5, cursor: "pointer" }}
+                  onClick={() => toggleSection('landed')}
+                >
+                  <span style={{ color: C.muted }}>Landed Cost (VAT base)</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="mono">{fmt(totalLanded)}</span>
+                    <span style={{ color: C.muted }}>{expandedSections.landed ? '−' : '+'}</span>
+                  </span>
+                </div>
+                {expandedSections.landed && (
+                  <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>CIF PHP</span>
+                      <span className="mono">{fmt(totalCifPhp)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>Customs Duty</span>
+                      <span className="mono">{fmt(computedDuty)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
+                      <span>BOC Fees + Stamp</span>
+                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.gold, borderTop: `1px solid ${C.border}55`, paddingTop: 4, marginTop: 4 }}>
+                      <span>Total Landed Cost</span>
+                      <span className="mono">{fmt(totalLanded)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+
+              {/* VAT */}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
                 <span>VAT ({settings.vatRate}%)</span>
-                <span className="mono">{calculated ? fmt(computedVat) : "—"}</span>
+                <span className="mono">{fmt(computedVat)}</span>
               </div>
+
+              {/* TOTAL DUE */}
               <div style={{ display: "flex", justifyContent: "space-between", borderTop: `2px solid ${C.gold}`, paddingTop: 14, marginTop: 6 }}>
                 <span style={{ fontWeight: 700 }}>TOTAL DUE</span>
-                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{calculated ? fmt(grandTotal) : "—"}</span>
+                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(grandTotal)}</span>
               </div>
             </div>
           </Card>
@@ -497,6 +528,7 @@ function AppContent() {
       </div>
     );
   }
+
 
   // ─── AI Classifier ────────────────────────────────────────────────────
   
