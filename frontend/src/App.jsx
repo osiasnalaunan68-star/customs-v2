@@ -101,7 +101,7 @@ function AppContent() {
     setTab("calc");
   };
 
-  // ─── HSLookup with Hierarchical Path, Species Badge, Indentation ──────
+  // ─── HSLookup ──────────────────────────────────────────────────────────
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [speciesFilter, setSpeciesFilter] = useState("");
@@ -251,7 +251,7 @@ function AppContent() {
     );
   }
 
-  // ─── Interactive Calculator with Calculate button ──────────────────────
+  // ─── Interactive Calculator with Edit buttons & Live Rate ──────────────
   function InteractiveCalc() {
     const [cifUsd, setCifUsd] = useState("10000");
     const [dutyRate, setDutyRate] = useState("5");
@@ -260,6 +260,7 @@ function AppContent() {
     const [hierPath, setHierPath] = useState("");
     const [species, setSpecies] = useState(null);
     const [calculated, setCalculated] = useState(false);
+    const [fetchingRate, setFetchingRate] = useState(false);
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -271,6 +272,25 @@ function AppContent() {
         setCalculated(false);
       }
     }, [sharedCodeData]);
+
+    // Live exchange rate fetch
+    const fetchLiveRate = async () => {
+      setFetchingRate(true);
+      try {
+        const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        const data = await res.json();
+        if (data.rates && data.rates.PHP) {
+          const phpRate = data.rates.PHP;
+          setSettings(prev => ({ ...prev, exchangeRate: phpRate }));
+          alert(`Exchange rate updated to ₱${phpRate.toFixed(2)} per USD`);
+        } else {
+          alert('Could not fetch rate. Please try again.');
+        }
+      } catch (err) {
+        alert('Network error. Please try again.');
+      }
+      setFetchingRate(false);
+    };
 
     const currentExRate = parseFloat(settings.exchangeRate) || 1;
     const totalCifPhp   = (parseFloat(cifUsd) || 0) * currentExRate;
@@ -292,14 +312,101 @@ function AppContent() {
               <Pill color={C.green}>Real-Time</Pill>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* CIF with edit button */}
               <div>
-                <label style={{ fontSize: 12, color: C.muted }}>CIF Value (USD)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>CIF Value (USD)</label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                </div>
                 <input type="number" value={cifUsd} onChange={e => setCifUsd(e.target.value)} />
               </div>
+
+              {/* Duty Rate with edit button */}
               <div>
-                <label style={{ fontSize: 12, color: C.muted }}>Duty Rate: <span className="mono" style={{ color: C.goldL }}>{dutyRate}%</span></label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Duty Rate: <span className="mono" style={{ color: C.goldL }}>{dutyRate}%</span></label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                </div>
                 <input type="range" min="0" max="50" step="1" value={dutyRate} onChange={e => setDutyRate(e.target.value)} style={{ padding: 0, height: 6, cursor: "pointer" }} />
               </div>
+
+              {/* Exchange Rate with edit + fetch live */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Exchange Rate (USD→PHP): <span className="mono" style={{ color: C.goldL }}>{currentExRate.toFixed(2)}</span></label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                  <button
+                    onClick={fetchLiveRate}
+                    disabled={fetchingRate}
+                    style={{ background: C.blue, color: C.white, padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}
+                  >
+                    {fetchingRate ? 'Loading...' : 'Fetch Live'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted }}>Last updated: {new Date().toLocaleString()}</div>
+              </div>
+
+              {/* VAT with edit button */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>VAT Rate: <span className="mono" style={{ color: C.goldL }}>{settings.vatRate}%</span></label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                </div>
+              </div>
+
+              {/* BOC Processing Fee with edit button */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>BOC Processing Fee: <span className="mono" style={{ color: C.goldL }}>₱{settings.bocProcessingFee}</span></label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                </div>
+              </div>
+
+              {/* Doc Stamp Fee with edit button */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Customs Doc Stamp: <span className="mono" style={{ color: C.goldL }}>₱{settings.docStampFee}</span></label>
+                  <button
+                    onClick={() => setTab("settings")}
+                    style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }}
+                    title="Edit in Settings"
+                  >
+                    ⚙️
+                  </button>
+                </div>
+              </div>
+
+              {/* AHTN Code display */}
               <div style={{ background: C.navyL, padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 11, color: C.muted }}>AHTN Code</span>
                 <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{hsCode}</span>
@@ -307,11 +414,12 @@ function AppContent() {
                 <p style={{ fontSize: 12, color: C.white, marginTop: 4, lineHeight: 1.3 }}>{legalDesc}</p>
                 {hierPath && <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hierPath}</p>}
               </div>
+
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={handleCalculate} style={{ flex: 1, background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600 }}>
                   Calculate
                 </button>
-                <button onClick={() => navigate("/settings")} style={{ flex: 1, background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>
+                <button onClick={() => setTab("settings")} style={{ flex: 1, background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>
                   Edit Settings
                 </button>
               </div>
