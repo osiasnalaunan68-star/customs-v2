@@ -279,19 +279,27 @@ function AppContent() {
         
     
     
+    
     const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
-        // Use Fixer.io API
+        // Fixer.io free tier only supports EUR as base
         const res = await fetch(
-          `http://data.fixer.io/api/latest?access_key=${FIXER_API_KEY}&base=USD&symbols=PHP`
+          `http://data.fixer.io/api/latest?access_key=${FIXER_API_KEY}&symbols=USD,PHP`
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (data.success && data.rates && data.rates.PHP) {
-          const rate = data.rates.PHP;
-          setSettings(prev => ({ ...prev, exchangeRate: rate }));
-          alert(`✅ Live rate (Fixer.io): ₱${rate.toFixed(2)} per USD`);
+        if (data.success && data.rates) {
+          const eurToUsd = data.rates.USD;
+          const eurToPhp = data.rates.PHP;
+          if (eurToUsd && eurToPhp) {
+            // Calculate PHP per USD
+            const rate = eurToPhp / eurToUsd;
+            setSettings(prev => ({ ...prev, exchangeRate: rate }));
+            alert(`✅ Live rate (Fixer.io): ₱${rate.toFixed(2)} per USD`);
+          } else {
+            throw new Error("Missing rate data");
+          }
         } else {
           throw new Error(data.error?.info || "Unexpected response");
         }
@@ -315,6 +323,7 @@ function AppContent() {
       }
       setFetchingRate(false);
     };
+;
 ;
 ;
 ;;
