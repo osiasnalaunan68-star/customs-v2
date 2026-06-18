@@ -6,6 +6,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const { login } = useAuth();
@@ -57,17 +58,32 @@ export default function Register() {
       <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
         <div style={{ marginBottom: 15 }}>
           <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={{ fontSize: 16 }} />
         </div>
         <div style={{ marginBottom: 15 }}>
           <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Password (min 6 chars)</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              style={{ fontSize: 16 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ background: 'transparent', color: '#8899AA', border: '1px solid #1E3A5F', padding: '0 12px', borderRadius: 6, fontSize: 12 }}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
         <div style={{ marginBottom: 15 }}>
           <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Confirm Password</label>
-          <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+          <input type={showPassword ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} required style={{ fontSize: 16 }} />
         </div>
-        <button type="submit" style={{ width: '100%', background: '#1B4F9B', color: '#F5F7FA', padding: 12, fontWeight: 600, borderRadius: 6 }}>Register</button>
+        <button type="submit" style={{ width: '100%', background: '#1B4F9B', color: '#F5F7FA', padding: 12, fontWeight: 600, borderRadius: 6, fontSize: 16 }}>Register</button>
       </form>
       <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>Already have an account? <a href="/login" style={{ color: '#C8972B' }}>Login</a></p>
     </div>

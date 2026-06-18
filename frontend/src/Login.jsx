@@ -5,6 +5,7 @@ import { API_BASE_URL } from './config';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
 
@@ -36,13 +37,28 @@ export default function Login() {
       <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
         <div style={{ marginBottom: 15 }}>
           <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={{ fontSize: 16 }} />
         </div>
         <div style={{ marginBottom: 15 }}>
           <label style={{ display: 'block', fontSize: 13, color: '#8899AA' }}>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              style={{ fontSize: 16 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ background: 'transparent', color: '#8899AA', border: '1px solid #1E3A5F', padding: '0 12px', borderRadius: 6, fontSize: 12 }}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
-        <button type="submit" style={{ width: '100%', background: '#C8972B', color: '#0A1628', padding: 12, fontWeight: 600, borderRadius: 6 }}>Log In</button>
+        <button type="submit" style={{ width: '100%', background: '#C8972B', color: '#0A1628', padding: 12, fontWeight: 600, borderRadius: 6, fontSize: 16 }}>Log In</button>
       </form>
       <p style={{ marginTop: 20, fontSize: 13, color: '#8899AA' }}>Don't have an account? <a href="/register" style={{ color: '#C8972B' }}>Register</a></p>
     </div>

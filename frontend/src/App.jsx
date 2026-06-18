@@ -3,7 +3,7 @@ import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, TARIFF_VERSION, LAST_UPDATED } from './config';
 
 // ─── THEME & DESIGN SYSTEM ───────────────────────────────────────────────
 const C = {
@@ -47,7 +47,6 @@ const DEFAULT_SETTINGS = {
   customOverrides: {},
 };
 
-// ─── Helper Components ──────────────────────────────────────────────────
 function Pill({ color, children }) {
   return (
     <span style={{
@@ -102,7 +101,7 @@ function AppContent() {
     setTab("calc");
   };
 
-  // ─── HSLookup ────────────────────────────────────────────────────────
+  // ─── HSLookup with Hierarchical Path, Species Badge, Indentation ──────
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [speciesFilter, setSpeciesFilter] = useState("");
@@ -252,7 +251,7 @@ function AppContent() {
     );
   }
 
-  // ─── Interactive Calculator ──────────────────────────────────────────
+  // ─── Interactive Calculator with Calculate button ──────────────────────
   function InteractiveCalc() {
     const [cifUsd, setCifUsd] = useState("10000");
     const [dutyRate, setDutyRate] = useState("5");
@@ -260,6 +259,7 @@ function AppContent() {
     const [legalDesc, setLegalDesc] = useState("General baseline description");
     const [hierPath, setHierPath] = useState("");
     const [species, setSpecies] = useState(null);
+    const [calculated, setCalculated] = useState(false);
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -268,6 +268,7 @@ function AppContent() {
         setLegalDesc(sharedCodeData.desc || "Loaded from system");
         setHierPath(sharedCodeData.path || "");
         setSpecies(sharedCodeData.species || null);
+        setCalculated(false);
       }
     }, [sharedCodeData]);
 
@@ -279,6 +280,8 @@ function AppContent() {
     const grandTotal    = computedDuty + computedVat + parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee);
 
     const fmt = n => "₱ " + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const handleCalculate = () => setCalculated(true);
 
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -304,6 +307,14 @@ function AppContent() {
                 <p style={{ fontSize: 12, color: C.white, marginTop: 4, lineHeight: 1.3 }}>{legalDesc}</p>
                 {hierPath && <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hierPath}</p>}
               </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={handleCalculate} style={{ flex: 1, background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600 }}>
+                  Calculate
+                </button>
+                <button onClick={() => navigate("/settings")} style={{ flex: 1, background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>
+                  Edit Settings
+                </button>
+              </div>
             </div>
           </Card>
         </div>
@@ -317,23 +328,23 @@ function AppContent() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Customs Duty ({dutyRate}%)</span>
-                <span className="mono">{fmt(computedDuty)}</span>
+                <span className="mono">{calculated ? fmt(computedDuty) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${C.border}55`, paddingBottom: 10 }}>
                 <span>BOC Fees + Stamp</span>
-                <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                <span className="mono">{calculated ? fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee)) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", background: `${C.blue}15`, padding: "8px 10px", borderRadius: 5 }}>
                 <span style={{ color: C.muted }}>Landed Cost (VAT base)</span>
-                <span className="mono">{fmt(totalLanded)}</span>
+                <span className="mono">{calculated ? fmt(totalLanded) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>VAT ({settings.vatRate}%)</span>
-                <span className="mono">{fmt(computedVat)}</span>
+                <span className="mono">{calculated ? fmt(computedVat) : "—"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", borderTop: `2px solid ${C.gold}`, paddingTop: 14, marginTop: 6 }}>
                 <span style={{ fontWeight: 700 }}>TOTAL DUE</span>
-                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(grandTotal)}</span>
+                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{calculated ? fmt(grandTotal) : "—"}</span>
               </div>
             </div>
           </Card>
@@ -479,8 +490,8 @@ function AppContent() {
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <span style={{ color: C.muted, fontSize: 11 }}>{TARIFF_VERSION} | Updated: {LAST_UPDATED}</span>
               <Pill color={C.goldL}>CMTA V2</Pill>
-              <a href="https://customs-docs.vercel.app" target="_blank" style={{ color: C.muted, textDecoration: "none", fontSize: 13, marginRight: 10 }}>📖 Docs</a>
               <button onClick={logout} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: "6px 14px", borderRadius: 5, fontSize: 12 }}>Logout</button>
             </div>
           </div>

@@ -19,6 +19,7 @@ class User(Base):
     def hash_password(cls, plain_password):
         return generate_password_hash(plain_password)
 
+# Use absolute path so the database file is created in the same folder as this file
 db_path = os.path.join(os.path.dirname(__file__), "customs.db")
 DATABASE_URL = f"sqlite:///{db_path}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

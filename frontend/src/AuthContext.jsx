@@ -19,7 +19,6 @@ export function AuthProvider({ children }) {
   const login = (newToken) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
-    // You could decode token to get email if needed
   };
 
   const logout = () => {

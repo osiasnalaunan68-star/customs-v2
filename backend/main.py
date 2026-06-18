@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 import os
 import re
-from sqlalchemy.orm import Session  # <-- added
+from sqlalchemy.orm import Session
 
 # Correct imports from the backend package
 from backend import parser
@@ -28,8 +28,12 @@ TARIFF_DATABASE = []
 CHAPTER_TITLES = {}
 HEADING_DESCRIPTIONS = {}
 SPECIES_MAP = {
-    "0101": {"emoji": "🐴", "name": "KABAYO/ASNO"},
-    "0102": {"emoji": "🐂", "name": "BAKA/KALABAW"},
+    "0101": {"emoji": "🐴", "name": "EQUINE (Horses, Asses, Mules, Hinnies)"},
+    "0102": {"emoji": "🐂", "name": "BOVINE (Cattle, Buffalo)"},
+    "0103": {"emoji": "🐖", "name": "PORCINE (Swine/Pigs)"},
+    "0104": {"emoji": "🐑", "name": "OVINE (Sheep)"},
+    "0105": {"emoji": "🐓", "name": "POULTRY (Fowls, Ducks, Geese, Turkeys)"},
+    "0106": {"emoji": "🦎", "name": "OTHER LIVE ANIMALS (Reptiles, Birds, etc.)"},
 }
 
 TARIFF_FILE = "backend/ph_tariff_organized.txt"
