@@ -3,7 +3,7 @@ import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { API_BASE_URL, TARIFF_VERSION, LAST_UPDATED } from './config';
+import { API_BASE_URL, CURRENCYFREAKS_KEY, TARIFF_VERSION, LAST_UPDATED } from './config';
 
 // ─── THEME & DESIGN SYSTEM ───────────────────────────────────────────────
 const C = {
@@ -281,26 +281,48 @@ function AppContent() {
     
     
     
+    
     const fetchLiveRate = async () => {
       setFetchingRate(true);
       try {
-        // Use exchangerate-api.com – free, no key required
-        const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        // CurrencyFreaks API – updates every 5 minutes
+        const res = await fetch(
+          `https://api.currencyfreaks.com/v2.0/rates/latest?apikey=${CURRENCYFREAKS_KEY}&base=USD&symbols=PHP`
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.rates && data.rates.PHP) {
-          const rate = data.rates.PHP;
-          setSettings(prev => ({ ...prev, exchangeRate: rate }));
-          alert(`✅ Live rate: ₱${rate.toFixed(2)} per USD`);
+          const rate = parseFloat(data.rates.PHP);
+          if (!isNaN(rate) && rate > 0) {
+            setSettings(prev => ({ ...prev, exchangeRate: rate }));
+            alert(`✅ Live rate (CurrencyFreaks): ₱${rate.toFixed(2)} per USD`);
+          } else {
+            throw new Error("Invalid rate received");
+          }
         } else {
-          throw new Error("Rate not found in response");
+          throw new Error(data.message || "Unexpected response");
         }
       } catch (err) {
-        console.error("Exchange rate API failed:", err);
-        alert(`❌ Could not fetch live rate: ${err.message}. Please try again later.`);
+        console.error("CurrencyFreaks failed:", err);
+        // Fallback to exchangerate-api.com
+        try {
+          const fallback = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          if (!fallback.ok) throw new Error(`HTTP ${fallback.status}`);
+          const data = await fallback.json();
+          if (data.rates && data.rates.PHP) {
+            const rate = data.rates.PHP;
+            setSettings(prev => ({ ...prev, exchangeRate: rate }));
+            alert(`💡 Live rate (backup): ₱${rate.toFixed(2)} per USD`);
+          } else {
+            throw new Error("Fallback rate missing");
+          }
+        } catch (fallbackErr) {
+          alert(`❌ Could not fetch live rate: ${fallbackErr.message}`);
+        }
       }
       setFetchingRate(false);
     };
+;
 ;
 ;
 ;
