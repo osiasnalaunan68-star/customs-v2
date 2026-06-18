@@ -480,6 +480,7 @@ function AppContent() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <Pill color={C.goldL}>CMTA V2</Pill>
+              <a href="https://customs-docs.vercel.app" target="_blank" style={{ color: C.muted, textDecoration: "none", fontSize: 13, marginRight: 10 }}>📖 Docs</a>
               <button onClick={logout} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: "6px 14px", borderRadius: 5, fontSize: 12 }}>Logout</button>
             </div>
           </div>
