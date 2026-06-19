@@ -6,7 +6,6 @@ from typing import Optional
 import os
 import re
 from sqlalchemy.orm import Session
-import time
 
 from backend import parser
 from backend.auth import create_access_token, get_current_user, get_db
@@ -45,7 +44,7 @@ if os.path.exists(TARIFF_FILE):
         hd = item["code"][:4]
         if hd not in HEADING_DESCRIPTIONS:
             HEADING_DESCRIPTIONS[hd] = item["description"]
-    print(f"Loaded {len(TARIFF_DATABASE)} records.")
+    print(f"Loaded {len(TARIFF_DATABASE)} records, {len(CHAPTER_TITLES)} chapters, {len(HEADING_DESCRIPTIONS)} headings.")
 else:
     print("Warning: tariff file not found.")
 
@@ -74,11 +73,9 @@ class ClassificationRequest(BaseModel):
 # ─── Authentication Endpoints ─────────────────────────────────────────────
 @app.post("/register", status_code=201)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Check for existing email FIRST – prevents duplicates
     existing = db.query(User).filter(User.email == user.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
     try:
         hashed = User.hash_password(user.password)
         new_user = User(email=user.email, hashed_password=hashed)
@@ -160,18 +157,16 @@ def get_chapter_details(ch_num: int, current_user: User = Depends(get_current_us
     return {"items": enhanced}
 
 @app.post("/classify")
-
-@app.post("/classify")
 def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
     desc = req.description.lower().strip()
     predictions = []
-    
-    # ─── 1. CHAPTER 10 CEREALS / RICE ───
+
+    # ─── 1. CHAPTER 10 CEREALS / RICE ──────────────────────────────────
     if any(word in desc for word in ["rice", "arroz", "bigas", "palay", "wheat", "trigo", "corn", "mais", "barley", "cebada", "oats", "avena", "rye", "centeno"]):
         predictions.append({
             "code": "1006.30.99",
             "confidence": "95%",
-            "description": "Semi-milled or wholly milled rice, whether or not polished or glazed",
+            "description": "Semi-milled or wholly milled rice",
             "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
             "duty_rate": 35.0,
             "chapter": "Chapter 10: Cereals"
@@ -180,12 +175,12 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "code": "1006.20.90",
             "confidence": "85%",
             "description": "Husked (brown) rice",
-            "reasoning": "Alternative: Husked rice.",
+            "reasoning": "Alternative: husked rice.",
             "duty_rate": 35.0,
             "chapter": "Chapter 10: Cereals"
         })
-    
-    # ─── 2. CHAPTER 8 FRUITS AND NUTS ───
+
+    # ─── 2. CHAPTER 8 FRUITS AND NUTS ────────────────────────────────
     elif any(word in desc for word in ["apple", "mango", "banana", "fruit", "prutas", "nut"]):
         predictions.append({
             "code": "0808.10.00",
@@ -195,8 +190,8 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "duty_rate": 7.0,
             "chapter": "Chapter 08: Edible Fruit and Nuts"
         })
-    
-    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ───
+
+    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ──────────────────────────
     elif any(word in desc for word in ["live", "buhay"]) and any(word in desc for word in ["animal", "hayop", "cattle", "baka", "horse", "kabayo", "pig", "baboy"]):
         predictions.append({
             "code": "0102.21.00",
@@ -206,8 +201,8 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "duty_rate": 0.0,
             "chapter": "Chapter 01: Live animals"
         })
-    
-    # ─── 4. FALLBACK – search database ───
+
+    # ─── 4. FALLBACK – database scan ─────────────────────────────────
     if not predictions:
         for item in TARIFF_DATABASE[:10]:
             if desc in item["description"].lower():
@@ -220,8 +215,8 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
                     "chapter": f"Chapter {item['code'][:2]}"
                 })
                 break
-    
-    # ─── 5. ABSOLUTE FALLBACK ───
+
+    # ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
     if not predictions:
         predictions.append({
             "code": "0000.00.00",
@@ -231,39 +226,8 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "duty_rate": 0.0,
             "chapter": "Unknown"
         })
-    
-    return {"predictions": predictions}
 
-    elif "rice" in desc:
-        result = {
-            "hs_code": "1006.30.99",
-            "confidence": "98%",
-            "description": "Semi-milled or wholly milled rice...",
-            "reasoning": "Product explicitly matches definitions for milled cereal grains.",
-            "duty_rate": 35.0,
-            "chapter": "Chapter 10: Cereals",
-            "alternatives": [{"code": "1006.40.90", "description": "Broken Rice: Other"}]
-        }
-    else:
-        first_item = TARIFF_DATABASE[0] if TARIFF_DATABASE else {"code": "0000.00.00", "description": "Generic Goods", "rate_2024": 0.0, "chapter": 1}
-        result = {
-            "hs_code": first_item["code"],
-            "confidence": "45% (Low)",
-            "description": first_item["description"],
-            "reasoning": "Matches general baseline description structure.",
-            "duty_rate": first_item["rate_2024"],
-            "chapter": f"Chapter {first_item['chapter']:02d}",
-            "alternatives": []
-        }
-    code = result["hs_code"]
-    item = next((it for it in TARIFF_DATABASE if it["code"] == code), None)
-    if item:
-        result["hierarchical_path"] = build_hierarchical_path(item)
-        result["species"] = get_species_info(code)
-    else:
-        result["hierarchical_path"] = f"Chapter {code[:2]} > Heading {code[:4]} > {result['description']}"
-        result["species"] = get_species_info(code)
-    return result
+    return {"predictions": predictions}
 
 @app.get("/")
 def home():
