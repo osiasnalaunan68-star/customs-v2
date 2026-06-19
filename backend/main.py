@@ -4,8 +4,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import os
-from dotenv import load_dotenv
-load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 import re
 from sqlalchemy.orm import Session
