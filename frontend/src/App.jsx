@@ -520,6 +520,7 @@ function AppContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
+            ahtn_code: hsCode,
             fob_fca_value: parseFloat(fob) || 0,
             exchange_rate: currentExRate,
             freight_cost: parseFloat(freight) || 0,
@@ -747,6 +748,45 @@ function AppContent() {
                 <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(assessment.total_tax_payable)}</span>
               </div>
             </div>
+            {/* ⚖️ Module 1: Legal Justification Engine */}
+            {calcResult?.legal && (
+              <div style={{ marginTop: 12, padding: 10, background: `${C.gold}11`, borderRadius: 6, border: `1px solid ${C.gold}33`, fontSize: 11, color: C.muted }}>
+                <strong>⚖️ Legal Justification Base:</strong><br />
+                {calcResult.legal.justification}
+              </div>
+            )}
+
+            {/* 📈 Module 2: Capital Allocation Simulator */}
+            {calcResult?.volatility && (
+              <div style={{ marginTop: 12, padding: 10, background: `${C.blue}11`, borderRadius: 6, border: `1px solid ${C.blue}33`, fontSize: 12 }}>
+                <strong>📈 Capital Allocation Stress-Test</strong>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 6 }}>
+                  <div><span style={{ color: C.green, fontSize: 11 }}>Baseline</span><br/><span className="mono">{fmt(calcResult.volatility.best_case)}</span></div>
+                  <div><span style={{ color: C.gold, fontSize: 11 }}>+2% Volatility</span><br/><span className="mono">{fmt(calcResult.volatility.plus_2_percent)}</span></div>
+                  <div><span style={{ color: C.red, fontSize: 11 }}>+5% Risk Cap</span><br/><span className="mono">{fmt(calcResult.volatility.plus_5_percent)}</span></div>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                  Recommended capital buffer allocation: {fmt(calcResult.volatility.buffer_2)} up to {fmt(calcResult.volatility.buffer_5)}
+                </div>
+              </div>
+            )}
+
+            {/* 🛡️ Module 3: Post-Clearance Audit Profiler */}
+            {calcResult?.risk && (
+              <div style={{ marginTop: 12, padding: 10, background: C.navyL, borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12 }}>
+                <strong>🛡️ Post-Clearance Audit Risk Index</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 20 }}>{calcResult.risk.color}</span>
+                  <span style={{ fontWeight: 700, textTransform: "uppercase", color: calcResult.risk.level === "high" ? C.red : calcResult.risk.level === "medium" ? C.gold : C.green }}>
+                    {calcResult.risk.level} risk factor
+                  </span>
+                </div>
+                <ul style={{ fontSize: 11, color: C.muted, paddingLeft: 16, marginTop: 4, marginBottom: 0 }}>
+                  {calcResult.risk.reasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+
             <div style={{ marginTop: 16, padding: 10, background: `${C.gold}11`, borderRadius: 6, border: `1px solid ${C.gold}33`, fontSize: 11, color: C.muted }}>
               💡 <strong>Legal Audit Reference:</strong> All parameters are evaluated in absolute compliance with Section 400 of the Customs Modernization and Tariff Act (CMTA) governing Informal Entry Express Consignments.
             </div>

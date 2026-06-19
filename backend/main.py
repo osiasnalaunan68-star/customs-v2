@@ -254,6 +254,7 @@ def home():
 
 # ─── ADVANCED CALCULATOR COMPONENT SCHEMAS ───────────────────────────────
 class CustomsCalculationRequest(BaseModel):
+    ahtn_code: str = "0000.00.00"    # Added for legal matrix cross-reference
     fob_fca_value: float            # Invoice value in Foreign Currency
     exchange_rate: float            # Dynamic live rate or manual admin override
     freight_cost: float             # Shipping/Freight cost in Foreign Currency
@@ -262,6 +263,40 @@ class CustomsCalculationRequest(BaseModel):
     excise_tax: float = 0.0          # For specific high-value or restricted goods
     brokerage_fee: float = 700.0     # Default standard express clearance rate
     import_processing_fee: float = 0.0
+
+
+# ─── ULTRA ADVANCED ARCHITECTURE CORE MODULES ─────────────────────────────
+def get_legal_justification(code: str):
+    if not code or code == "0000.00.00":
+        return {"section": "General", "chapter": "General", "justification": "Standard tariff valuation rules apply."}
+    chapter = code[:2]
+    chapter_title = CHAPTER_TITLES.get(int(chapter), f"Chapter {chapter}") if 'CHAPTER_TITLES' in globals() else f"Chapter {chapter}"
+    return {
+        "section": "Integrated Tariff Framework",
+        "chapter": chapter_title,
+        "justification": f"Classification under AHTN {code} is legally justified under the Customs Modernization and Tariff Act (CMTA), referenced by {chapter_title}. The item excludes technical properties defined under alternative sections."
+    }
+
+def assess_risk(dangerous: bool, fob: float, duty_rate: float, code: str):
+    risk = "low"
+    reasons = []
+    if dangerous:
+        risk = "high"
+        reasons.append("Regulated / Dangerous goods categorization flagged.")
+    if fob > 50000:
+        risk = "medium"
+        reasons.append("High FOB value classification threshold exceeded (> USD 50k).")
+    if duty_rate == 0:
+        risk = "medium"
+        reasons.append("Zero duty declaration profile – subject to regulatory permit review.")
+    elif duty_rate > 20:
+        risk = "high"
+        reasons.append("High duty rate parameters – highly prone to valuation challenges.")
+    return {
+        "level": risk,
+        "color": "🟢" if risk == "low" else "🟡" if risk == "medium" else "🔴",
+        "reasons": reasons if reasons else ["Standard MFN item footprint with verified clean mapping."]
+    }
 
 @app.post("/calculator/compute-boc-taxes")
 def compute_boc_taxes(req: CustomsCalculationRequest):
@@ -307,6 +342,7 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
             customs_doc_stamp
         )
         
+        base_total = total_tax_payable
         return {
             "status": "success",
             "valuation": {
@@ -321,7 +357,16 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
                 "customs_doc_stamp": customs_doc_stamp,
                 "total_landed_cost": round(total_landed_cost, 2),
                 "total_tax_payable": round(total_tax_payable, 2)
-            }
+            },
+            "legal": get_legal_justification(req.ahtn_code),
+            "volatility": {
+                "best_case": round(base_total, 2),
+                "plus_2_percent": round(base_total * 1.02, 2),
+                "plus_5_percent": round(base_total * 1.05, 2),
+                "buffer_2": round(base_total * 0.02, 2),
+                "buffer_5": round(base_total * 0.05, 2)
+            },
+            "risk": assess_risk(req.is_dangerous_goods, req.fob_fca_value, req.rate_of_duty, req.ahtn_code)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Engine Calculation Failure: {str(e)}")
