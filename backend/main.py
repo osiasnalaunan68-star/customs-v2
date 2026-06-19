@@ -160,19 +160,80 @@ def get_chapter_details(ch_num: int, current_user: User = Depends(get_current_us
     return {"items": enhanced}
 
 @app.post("/classify")
+
+@app.post("/classify")
 def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
-    desc = req.description.lower()
-    result = None
-    if "apple" in desc or "fruit" in desc:
-        result = {
-            "hs_code": "0808.10.00",
-            "confidence": "94%",
-            "description": "Apples, fresh",
-            "reasoning": "Identified as a fresh pomaceous fruit...",
+    desc = req.description.lower().strip()
+    predictions = []
+    
+    # ─── 1. CHAPTER 10 CEREALS / RICE ───
+    if any(word in desc for word in ["rice", "arroz", "bigas", "palay", "wheat", "trigo", "corn", "mais", "barley", "cebada", "oats", "avena", "rye", "centeno"]):
+        predictions.append({
+            "code": "1006.30.99",
+            "confidence": "95%",
+            "description": "Semi-milled or wholly milled rice, whether or not polished or glazed",
+            "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
+            "duty_rate": 35.0,
+            "chapter": "Chapter 10: Cereals"
+        })
+        predictions.append({
+            "code": "1006.20.90",
+            "confidence": "85%",
+            "description": "Husked (brown) rice",
+            "reasoning": "Alternative: Husked rice.",
+            "duty_rate": 35.0,
+            "chapter": "Chapter 10: Cereals"
+        })
+    
+    # ─── 2. CHAPTER 8 FRUITS AND NUTS ───
+    elif any(word in desc for word in ["apple", "mango", "banana", "fruit", "prutas", "nut"]):
+        predictions.append({
+            "code": "0808.10.00",
+            "confidence": "92%",
+            "description": "Fresh fruit",
+            "reasoning": "Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.",
             "duty_rate": 7.0,
-            "chapter": "Chapter 08: Edible Fruit and Nuts",
-            "alternatives": [{"code": "0808.30.00", "description": "Pears, fresh"}]
-        }
+            "chapter": "Chapter 08: Edible Fruit and Nuts"
+        })
+    
+    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ───
+    elif any(word in desc for word in ["live", "buhay"]) and any(word in desc for word in ["animal", "hayop", "cattle", "baka", "horse", "kabayo", "pig", "baboy"]):
+        predictions.append({
+            "code": "0102.21.00",
+            "confidence": "85%",
+            "description": "Live bovine animals (pure-bred breeding animals)",
+            "reasoning": "Product identified as live animal, classified under Chapter 1.",
+            "duty_rate": 0.0,
+            "chapter": "Chapter 01: Live animals"
+        })
+    
+    # ─── 4. FALLBACK – search database ───
+    if not predictions:
+        for item in TARIFF_DATABASE[:10]:
+            if desc in item["description"].lower():
+                predictions.append({
+                    "code": item["code"],
+                    "confidence": "70%",
+                    "description": item["description"],
+                    "reasoning": "Matched via database keyword scan.",
+                    "duty_rate": item.get("rate_2024", 3.0),
+                    "chapter": f"Chapter {item['code'][:2]}"
+                })
+                break
+    
+    # ─── 5. ABSOLUTE FALLBACK ───
+    if not predictions:
+        predictions.append({
+            "code": "0000.00.00",
+            "confidence": "Low",
+            "description": "Unclassified",
+            "reasoning": "No specific match. Please refine description.",
+            "duty_rate": 0.0,
+            "chapter": "Unknown"
+        })
+    
+    return {"predictions": predictions}
+
     elif "rice" in desc:
         result = {
             "hs_code": "1006.30.99",
