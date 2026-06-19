@@ -20,74 +20,23 @@ const C = {
   card:   "#0D1F3C",
 };
 
-
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #0A0F1E;
-    color: #E8F0FE;
-    font-family: 'Inter', sans-serif;
-    position: relative;
-  }
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(200,151,43,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(200,151,43,0.04) 1px, transparent 1px);
-    background-size: 48px 48px;
-    pointer-events: none;
-    z-index: 0;
-  }
+  body { background: ${C.navy}; color: ${C.white}; font-family: 'Inter', sans-serif; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #112240; }
-  ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: ${C.navyL}; }
+  ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
   input, select, textarea {
-    background: #112240;
-    border: 1px solid #1E3A5F;
-    color: #E8F0FE;
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
-    width: 100%;
+    background: ${C.navyL}; border: 1px solid ${C.border};
+    color: ${C.white}; border-radius: 6px; padding: 10px 14px;
+    font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
+    transition: all 0.2s; width: 100%;
   }
-  input:focus, select:focus, textarea:focus {
-    border-color: #C8972B;
-    box-shadow: 0 0 8px rgba(200,151,43,0.2);
-  }
+  input:focus, select:focus, textarea:focus { border-color: ${C.gold}; box-shadow: 0 0 8px rgba(200,151,43,0.2); }
   button { cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s; }
   button:hover { filter: brightness(1.1); }
   .mono { font-family: 'JetBrains Mono', monospace; }
-  .card {
-    background: #111827;
-    border: 1px solid rgba(200,151,43,0.15);
-    border-radius: 12px;
-    padding: 20px;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  .card:hover {
-    border-color: rgba(200,151,43,0.4);
-    box-shadow: 0 0 30px rgba(200,151,43,0.06);
-  }
-  .badge-gold {
-    background: #C8972B;
-    color: #0A0F1E;
-  }
-  .pill {
-    background: rgba(200,151,43,0.15);
-    color: #C8972B;
-    border: 1px solid rgba(200,151,43,0.3);
-  }
-  @media (max-width: 768px) {
-    .grid-2 { grid-template-columns: 1fr !important; }
-    .header { flex-direction: column; text-align: center; }
-    .card { padding: 12px; }
-  }
 `;
 
 const DEFAULT_SETTINGS = {
@@ -1134,7 +1083,7 @@ function AppContent() {
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <span style={{ color: C.muted, fontSize: 11 }}>{TARIFF_VERSION} | Updated: {LAST_UPDATED}</span>
               <Pill color={C.goldL}>CMTA V2</Pill>
-              <a href="https://customs-docs.vercel.app" target="_blank" style="color: #C8972B; text-decoration: none; font-size: 13px; margin-right: 10px;">📖 About</a><button onClick={logout} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: "6px 14px", borderRadius: 5, fontSize: 12 }}>Logout</button>
+              <button onClick={logout} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: "6px 14px", borderRadius: 5, fontSize: 12 }}>Logout</button>
             </div>
           </div>
         </div>
