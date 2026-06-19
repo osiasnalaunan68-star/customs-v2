@@ -492,12 +492,13 @@ function AppContent() {
 
   // ─── MODULE 3: AI SMART CLASSIFIER ──────────────────────────────────────
     // ─── MODULE 3: AI NEURAL CLASSIFIER MATRIX ───────────────────────────
+    // ─── MODULE 3: AI NEURAL CLASSIFIER MATRIX ───────────────────────────
   function AIClassifier() {
     const [text, setText] = useState("");
     const [predicting, setPredicting] = useState(false);
     const [matches, setMatches] = useState([]);
 
-    // Auto-fill mula sa HSLookup AI Classify button kung may laman
+    // Auto-fill mula sa HSLookup AI Classify (🤖) button kung may laman
     useEffect(() => {
       if (window.__aiPrefill) {
         setText(window.__aiPrefill);
@@ -518,7 +519,6 @@ function AppContent() {
         });
         const data = await res.json();
         if (res.ok) {
-          // Siguraduhing array ang makuha natin mula sa predictions o matches
           setMatches(data.predictions || data.matches || data.results || []);
         }
       } catch (err) {
@@ -531,23 +531,22 @@ function AppContent() {
       <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <h3 style={{ color: C.gold }}>🤖 AI Neural Classifier Matrix</h3>
-          <p style={{ fontSize: 12, color: C.muted }}>Mag-paste ng commercial description o item declaration para awtomatikong hanapin ang tamang HS Code.</p>
+          <p style={{ fontSize: 12, color: C.muted }}>Mag-paste ng description o item declaration mula sa HSLookup para awtomatikong hanapin ang tamang HS Code.</p>
         </div>
         <form onSubmit={runClassification} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <textarea 
             rows="4" 
             value={text} 
             onChange={e => setText(e.target.value)} 
-            placeholder="Halimbawa: Live pure-bred breeding horses from Europe..." 
+            placeholder="Mag-type o mag-paste ng item declaration dito..." 
           />
           <button type="submit" disabled={predicting} style={{ background: C.gold, color: C.navy, padding: 12, borderRadius: 6, fontWeight: 700 }}>
-            {predicting ? "Analyzing Framework Components..." : "Deploy Extraction Pattern"}
+            {predicting ? "Analyzing Components..." : "Deploy Extraction Pattern"}
           </button>
         </form>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
           {matches && matches.map((m, i) => {
-            // Siguraduhing kukunin ang tamang properties kahit magkaiba ang field names ng backend
             const code = m.code || m.ahtn_code || "N/A";
             const description = m.description || m.desc || (typeof m === 'string' ? m : "No Description");
             const rate = m.rate !== undefined ? m.rate : (m.rate_2026 || 0);
@@ -570,12 +569,13 @@ function AppContent() {
           })}
           
           {!predicting && matches.length === 0 && text.trim() && (
-            <p style={{ fontSize: 12, color: C.muted, textAlignment: "center" }}>No analysis rows extracted. Try refining the text description.</p>
+            <p style={{ fontSize: 12, color: C.muted, textAlign: "center" }}>No analysis rows extracted. Try refining the text description.</p>
           )}
         </div>
       </Card>
     );
   }
+
 
 
   // ─── MODULE 4: SYSTEM SETTINGS OVERRIDES ────────────────────────────────
