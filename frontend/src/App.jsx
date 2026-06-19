@@ -3,7 +3,7 @@ import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { API_BASE_URL, CURRENCYFREAKS_KEY, TARIFF_VERSION, LAST_UPDATED } from './config';
+import { API_BASE_URL, TARIFF_VERSION, LAST_UPDATED } from './config';
 
 // ─── THEME & DESIGN SYSTEM ───────────────────────────────────────────────
 const C = {
@@ -22,8 +22,6 @@ const C = {
 
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr !important; } .header { flex-direction: column; text-align: center; } .card { padding: 12px; } }
-  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr !important; } .header { flex-direction: column; text-align: center; } .card { padding: 12px; } }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: ${C.navy}; color: ${C.white}; font-family: 'Inter', sans-serif; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -103,7 +101,7 @@ function AppContent() {
     setTab("calc");
   };
 
-  // ─── HSLookup ──────────────────────────────────────────────────────────
+  // ─── HSLookup with all optimizations ──────────────────────────────────
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [speciesFilter, setSpeciesFilter] = useState("");
@@ -111,9 +109,13 @@ function AppContent() {
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [injectedCodes, setInjectedCodes] = useState({});
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 25;
 
     useEffect(() => {
       const fetchSpecies = async () => {
+        if (!token) return;
         try {
           const res = await fetch(`${API_BASE_URL}/species`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -127,11 +129,12 @@ function AppContent() {
 
     const search = async () => {
       if (!query.trim()) return;
-      setLoading(true); setError(""); setResults([]);
+      if (!token) { setError("Please log in to search"); return; }
+      setLoading(true); setError(""); setResults([]); setCurrentPage(1);
       try {
         const params = new URLSearchParams({
           q: query,
-          limit: 25,
+          limit: 100,
         });
         if (speciesFilter) params.append('species', speciesFilter);
         const res = await fetch(`${API_BASE_URL}/search?${params}`, {
@@ -147,7 +150,24 @@ function AppContent() {
       setLoading(false);
     };
 
-    const grouped = results.reduce((acc, item) => {
+    const handleInject = (code, finalRate, description, hierarchical_path, species) => {
+      handleCodeTransfer(code, finalRate, description, hierarchical_path, species);
+      setInjectedCodes(prev => ({ ...prev, [code]: true }));
+      setTimeout(() => {
+        setInjectedCodes(prev => ({ ...prev, [code]: false }));
+      }, 2000);
+    };
+
+    const copyToClipboard = (code) => {
+      navigator.clipboard?.writeText(code).catch(() => {});
+    };
+
+    const totalPages = Math.ceil(results.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentResults = results.slice(startIndex, endIndex);
+
+    const grouped = currentResults.reduce((acc, item) => {
       const heading = item.code.slice(0, 4);
       if (!acc[heading]) acc[heading] = [];
       acc[heading].push(item);
@@ -156,105 +176,190 @@ function AppContent() {
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <Card>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              placeholder="Enter HS code or keyword..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && search()}
-              style={{ flex: 2, minWidth: 200 }}
-            />
-            <select
-              value={speciesFilter}
-              onChange={e => setSpeciesFilter(e.target.value)}
-              style={{ flex: 0.5, minWidth: 120 }}
-            >
-              <option value="">All Species</option>
-              {speciesList.map(sp => (
-                <option key={sp.name} value={sp.name}>{sp.emoji} {sp.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={search}
-              disabled={loading}
-              style={{ background: C.gold, color: C.navy, padding: "0 24px", borderRadius: 7, fontWeight: 600 }}
-            >
-              {loading ? "Searching..." : "Search"}
-            </button>
-          </div>
-          {error && <p style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{error}</p>}
-        </Card>
+        {/* Sticky Search Bar */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: C.navy, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+          <Card>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                placeholder="Enter HS code or keyword..."
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && search()}
+                style={{ flex: 2, minWidth: 200 }}
+              />
+              <select
+                value={speciesFilter}
+                onChange={e => setSpeciesFilter(e.target.value)}
+                style={{ flex: 0.5, minWidth: 120 }}
+              >
+                <option value="">All Species</option>
+                {speciesList.map(sp => (
+                  <option key={sp.name} value={sp.name}>{sp.emoji} {sp.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={search}
+                disabled={loading}
+                style={{ background: C.gold, color: C.navy, padding: "0 24px", borderRadius: 7, fontWeight: 600 }}
+              >
+                {loading ? "Searching..." : "Search"}
+              </button>
+            </div>
+            {error && <p style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{error}</p>}
+          </Card>
+        </div>
 
         {results.length > 0 && (
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ overflow: "auto", maxHeight: 500 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: C.navyL, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
-                    <th style={{ padding: "12px 14px", textAlign: "left" }}>Code</th>
-                    <th style={{ padding: "12px 14px", textAlign: "left" }}>Description / Hierarchical Path</th>
-                    <th style={{ padding: "12px 14px", textAlign: "left" }}>Rate</th>
-                    <th style={{ padding: "12px 14px", textAlign: "center" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(grouped).map(([heading, items]) => {
-                    const firstItem = items[0];
-                    const headingDesc = firstItem.hierarchical_path.split('>')[1]?.trim() || heading;
-                    return (
-                      <React.Fragment key={heading}>
-                        <tr style={{ background: `${C.navyL}55`, borderTop: `2px solid ${C.border}` }}>
-                          <td colSpan="4" style={{ padding: "8px 14px", fontWeight: 700, color: C.goldL }}>
-                            {heading} – {headingDesc}
-                          </td>
-                        </tr>
-                        {items.map((item, idx) => {
-                          const hasOverride = settings.customOverrides[item.code] !== undefined;
-                          const finalRate = hasOverride ? settings.customOverrides[item.code] : item.rate_2024;
-                          const indent = item.code.length > 4 ? 20 : 0;
-                          return (
-                            <tr key={idx} style={{ borderBottom: `1px solid ${C.border}20` }}>
-                              <td className="mono" style={{ padding: "10px 14px", paddingLeft: indent + 14, color: C.goldL, fontWeight: 600 }}>
-                                {item.code}
-                              </td>
-                              <td style={{ padding: "10px 14px", paddingLeft: indent + 14, lineHeight: 1.4 }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                  <span>{item.description}</span>
-                                  <span style={{ fontSize: 11, color: C.muted }}>{item.hierarchical_path}</span>
-                                  <div style={{ marginTop: 4 }}>
-                                    <SpeciesBadge species={item.species} />
+          <>
+            <Card style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ overflow: "auto", maxHeight: 500 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: C.navyL, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
+                      <th style={{ padding: "12px 14px", textAlign: "left", width: "15%" }}>Code</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", width: "55%" }}>Description / Hierarchical Path</th>
+                      <th style={{ padding: "12px 14px", textAlign: "left", width: "12%" }}>Rate</th>
+                      <th style={{ padding: "12px 14px", textAlign: "center", width: "18%" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(grouped).map(([heading, items]) => {
+                      const firstItem = items[0];
+                      const headingDesc = firstItem.hierarchical_path?.split('>')[1]?.trim() || heading;
+                      return (
+                        <React.Fragment key={heading}>
+                          <tr style={{ background: `${C.navyL}55`, borderTop: `2px solid ${C.border}` }}>
+                            <td colSpan="4" style={{ padding: "8px 14px", fontWeight: 700, color: C.goldL }}>
+                              {heading} – {headingDesc}
+                            </td>
+                          </tr>
+                          {items.map((item, idx) => {
+                            const hasOverride = settings.customOverrides[item.code] !== undefined;
+                            const finalRate = hasOverride ? settings.customOverrides[item.code] : item.rate_2024;
+                            const indent = item.code.length > 4 ? 20 : 0;
+                            const isInjected = injectedCodes[item.code];
+                            return (
+                              <tr 
+                                key={idx} 
+                                style={{ 
+                                  borderBottom: `1px solid ${C.border}20`,
+                                  transition: 'background 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = `${C.blue}15`}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <td className="mono" style={{ padding: "10px 14px", paddingLeft: indent + 14, color: C.goldL, fontWeight: 600 }}>
+                                  {item.code}
+                                  <button
+                                    onClick={() => copyToClipboard(item.code)}
+                                    style={{ 
+                                      background: 'transparent', 
+                                      color: C.muted, 
+                                      border: 'none', 
+                                      cursor: 'pointer', 
+                                      marginLeft: 6,
+                                      fontSize: 12
+                                    }}
+                                    title="Copy HS Code"
+                                  >
+                                    📋
+                                  </button>
+                                </td>
+                                <td style={{ padding: "10px 14px", paddingLeft: indent + 14, lineHeight: 1.5 }}>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <span style={{ fontSize: 13 }}>{item.description}</span>
+                                    <span style={{ fontSize: 12, color: C.muted, wordBreak: 'break-word' }}>
+                                      {item.hierarchical_path?.split(' > ').map((part, i, arr) => (
+                                        <span key={i}>
+                                          {part}
+                                          {i < arr.length - 1 && <span style={{ color: C.gold, margin: '0 4px' }}> › </span>}
+                                        </span>
+                                      ))}
+                                    </span>
+                                    <div style={{ marginTop: 4 }}>
+                                      <SpeciesBadge species={item.species} />
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="mono" style={{ padding: "10px 14px", paddingLeft: indent + 14 }}>
-                                {finalRate}% {hasOverride && <span style={{ color: C.gold, display: "block", fontSize: 10 }}>(EO)</span>}
-                              </td>
-                              <td style={{ padding: "10px 14px", textAlign: "center" }}>
-                                <button
-                                  onClick={() => handleCodeTransfer(item.code, finalRate, item.description, item.hierarchical_path, item.species)}
-                                  style={{ padding: "4px 12px", background: C.blue, color: C.white, borderRadius: 5, fontSize: 12, fontWeight: 600 }}
-                                >
-                                  Inject
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+                                </td>
+                                <td className="mono" style={{ padding: "10px 14px", paddingLeft: indent + 14 }}>
+                                  {finalRate}% {hasOverride && <span style={{ color: C.gold, display: "block", fontSize: 10 }}>(EO)</span>}
+                                </td>
+                                <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                                  <button
+                                    onClick={() => handleInject(item.code, finalRate, item.description, item.hierarchical_path, item.species)}
+                                    style={{ 
+                                      padding: "6px 14px", 
+                                      background: isInjected ? C.green : C.blue, 
+                                      color: isInjected ? C.navy : C.white, 
+                                      borderRadius: 5, 
+                                      fontSize: 12, 
+                                      fontWeight: 600,
+                                      minWidth: 90,
+                                      transition: 'all 0.3s ease'
+                                    }}
+                                  >
+                                    {isInjected ? '✅ Injected!' : 'Inject'}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Pagination */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", flexWrap: "wrap", gap: 8 }}>
+              <span style={{ color: C.muted, fontSize: 13 }}>
+                Showing {startIndex + 1}–{Math.min(endIndex, results.length)} of {results.length} results
+              </span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  style={{ 
+                    padding: "6px 12px", 
+                    background: currentPage === 1 ? 'transparent' : C.blue, 
+                    color: currentPage === 1 ? C.muted : C.white, 
+                    borderRadius: 5, 
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: `1px solid ${currentPage === 1 ? C.border : C.blue}`,
+                    opacity: currentPage === 1 ? 0.5 : 1
+                  }}
+                >
+                  ← Prev
+                </button>
+                <span style={{ color: C.muted, fontSize: 13 }}>Page {currentPage} of {totalPages}</span>
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{ 
+                    padding: "6px 12px", 
+                    background: currentPage === totalPages ? 'transparent' : C.blue, 
+                    color: currentPage === totalPages ? C.muted : C.white, 
+                    borderRadius: 5, 
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: `1px solid ${currentPage === totalPages ? C.border : C.blue}`,
+                    opacity: currentPage === totalPages ? 0.5 : 1
+                  }}
+                >
+                  Next →
+                </button>
+              </div>
             </div>
-          </Card>
+          </>
         )}
       </div>
     );
   }
 
-  // ─── Interactive Calculator with Edit buttons & Live Rate ──────────────
-  
+  // ─── Interactive Calculator with Live Breakdown ──────────────────────
   function InteractiveCalc() {
     const [cifUsd, setCifUsd] = useState("10000");
     const [dutyRate, setDutyRate] = useState("5");
@@ -268,7 +373,6 @@ function AppContent() {
       boc: false,
       landed: false
     });
-    const [showFormulas, setShowFormulas] = useState(true);
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -305,13 +409,11 @@ function AppContent() {
     const grandTotal    = computedDuty + computedVat + parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee);
 
     const fmt = n => "₱ " + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtNum = n => n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const toggleSection = (section) => {
       setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
     };
-
-    // Helper to format numbers without currency for formula display
-    const fmtNum = n => n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -529,9 +631,7 @@ function AppContent() {
     );
   }
 
-
   // ─── AI Classifier ────────────────────────────────────────────────────
-  
   function AIClassifier() {
     const [desc, setDesc] = useState("");
     const [result, setResult] = useState(null);
@@ -646,9 +746,7 @@ function AppContent() {
     );
   }
 
-
-  // ─── Settings ──────────────────────────────────────────────────────────
-  
+  // ─── Settings with EO Overrides ──────────────────────────────────────
   function CustomsSettings() {
     const [vat, setVat] = useState(settings.vatRate);
     const [proc, setProc] = useState(settings.bocProcessingFee);
@@ -676,10 +774,8 @@ function AppContent() {
       const rate = parseFloat(ovRate) || 0;
 
       if (isEditing) {
-        // Update existing override
         setSettings(p => {
           const newOverrides = { ...p.customOverrides };
-          // Remove old entry if it exists
           delete newOverrides[editingHsCode];
           newOverrides[code] = rate;
           return { ...p, customOverrides: newOverrides };
@@ -689,7 +785,6 @@ function AppContent() {
         setOvCode("");
         setOvRate("");
       } else {
-        // Add new override
         setSettings(p => ({
           ...p,
           customOverrides: { ...p.customOverrides, [code]: rate }
@@ -713,7 +808,6 @@ function AppContent() {
           delete newOverrides[hsCode];
           return { ...p, customOverrides: newOverrides };
         });
-        // If the deleted item was being edited, clear the form
         if (editingHsCode === hsCode) {
           setIsEditing(false);
           setEditingHsCode("");
@@ -743,112 +837,31 @@ function AppContent() {
           <Card>
             <p style={{ fontWeight: 600, marginBottom: 14 }}>🏷️ EO Overrides</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input 
-                placeholder="AHTN Line Code (e.g., 1006.30.99)" 
-                value={ovCode} 
-                onChange={e => setOvCode(e.target.value)} 
-              />
-              <input 
-                type="number" 
-                placeholder="Override Tariff Rate (%)" 
-                value={ovRate} 
-                onChange={e => setOvRate(e.target.value)} 
-              />
-              <button 
-                onClick={handleOverrideSubmit} 
-                style={{ 
-                  background: isEditing ? C.gold : C.blue, 
-                  color: isEditing ? C.navy : C.white, 
-                  padding: 10, 
-                  borderRadius: 6, 
-                  fontWeight: 600 
-                }}
-              >
+              <input placeholder="AHTN Line Code" value={ovCode} onChange={e => setOvCode(e.target.value)} />
+              <input type="number" placeholder="Override Rate %" value={ovRate} onChange={e => setOvRate(e.target.value)} />
+              <button onClick={handleOverrideSubmit} style={{ background: isEditing ? C.gold : C.blue, color: isEditing ? C.navy : C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>
                 {isEditing ? "✏️ Update Override" : "➕ Add Override"}
               </button>
               {isEditing && (
-                <button 
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditingHsCode("");
-                    setOvCode("");
-                    setOvRate("");
-                  }} 
-                  style={{ 
-                    background: 'transparent', 
-                    color: C.muted, 
-                    border: `1px solid ${C.border}`, 
-                    padding: 6, 
-                    borderRadius: 4, 
-                    fontSize: 12 
-                  }}
-                >
+                <button onClick={() => { setIsEditing(false); setEditingHsCode(""); setOvCode(""); setOvRate(""); }} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: 6, borderRadius: 4, fontSize: 12 }}>
                   Cancel Edit
                 </button>
               )}
               <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}55`, paddingTop: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.goldL, display: "block", marginBottom: 6 }}>
-                  Active Overrides {Object.keys(settings.customOverrides).length > 0 ? `(${Object.keys(settings.customOverrides).length})` : ""}
-                </span>
-                {Object.entries(settings.customOverrides).length === 0 ? (
-                  <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>No overrides configured</p>
-                ) : (
-                  <div style={{ maxHeight: 200, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                    {Object.entries(settings.customOverrides).map(([code, rate]) => (
-                      <div 
-                        key={code} 
-                        style={{ 
-                          display: "flex", 
-                          justifyContent: "space-between", 
-                          alignItems: "center", 
-                          background: editingHsCode === code ? `${C.gold}22` : C.navyL, 
-                          padding: "6px 10px", 
-                          borderRadius: 4, 
-                          fontSize: 12,
-                          border: editingHsCode === code ? `1px solid ${C.gold}` : `1px solid ${C.border}55`
-                        }}
-                      >
-                        <div>
-                          <span className="mono" style={{ fontWeight: 600, color: C.goldL }}>{code}</span>
-                          <span style={{ color: C.muted, marginLeft: 8 }}>→</span>
-                          <span className="mono" style={{ color: C.white, marginLeft: 8 }}>{rate}%</span>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            onClick={() => handleEditOverride(code, rate)}
-                            style={{ 
-                              background: 'transparent', 
-                              color: C.gold, 
-                              border: 'none', 
-                              cursor: 'pointer', 
-                              padding: '2px 6px',
-                              borderRadius: 3,
-                              fontSize: 14
-                            }}
-                            title="Edit override"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => handleDeleteOverride(code)}
-                            style={{ 
-                              background: 'transparent', 
-                              color: C.red, 
-                              border: 'none', 
-                              cursor: 'pointer', 
-                              padding: '2px 6px',
-                              borderRadius: 3,
-                              fontSize: 14
-                            }}
-                            title="Delete override"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.goldL }}>Active Overrides ({Object.keys(settings.customOverrides).length})</span>
+                {Object.entries(settings.customOverrides).map(([code, rate]) => (
+                  <div key={code} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: editingHsCode === code ? `${C.gold}22` : C.navyL, padding: "6px 10px", borderRadius: 4, fontSize: 12, marginTop: 4, border: editingHsCode === code ? `1px solid ${C.gold}` : `1px solid ${C.border}55` }}>
+                    <div>
+                      <span className="mono" style={{ fontWeight: 600, color: C.goldL }}>{code}</span>
+                      <span style={{ color: C.muted, marginLeft: 8 }}>→</span>
+                      <span className="mono" style={{ color: C.white, marginLeft: 8 }}>{rate}%</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => handleEditOverride(code, rate)} style={{ background: 'transparent', color: C.gold, border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 14 }} title="Edit">✏️</button>
+                      <button onClick={() => handleDeleteOverride(code)} style={{ background: 'transparent', color: C.red, border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 14 }} title="Delete">🗑️</button>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           </Card>
@@ -856,7 +869,6 @@ function AppContent() {
       </div>
     );
   }
-
 
   const TABS = [
     { id: "lookup",    label: "🔍 HS Lookup" },
