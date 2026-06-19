@@ -263,7 +263,7 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         return {"predictions": predictions[:3]}
 
     # ─── 4. DATABASE SCAN (full scan, up to 3 matches) ──────────────
-    for item in TARIFF_DATABASE[:50]:  # limit for performance
+    for item in TARIFF_DATABASE:  # limit for performance
         if desc in item["description"].lower():
             r = item.get("rate_2026") or item.get("rate_2024") or 0
             predictions.append({
