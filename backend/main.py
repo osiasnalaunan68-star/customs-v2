@@ -362,6 +362,7 @@ def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
 
 # ─── Debug Endpoint ──────────────────────────────────────────────────────
+
 @app.get("/debug")
 def debug_info(current_user: User = Depends(get_current_user)):
     return {
