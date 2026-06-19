@@ -210,25 +210,30 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
             "chapter": "Chapter 01: Live animals"
         })
 
-    # ─── 4. FALLBACK – database scan ─────────────────────────────────
+    # ─── 4. FALLBACK – Comprehensive Database Scan ───────────────────
     if not predictions:
-        for item in TARIFF_DATABASE[:10]:
-            if desc in item["description"].lower():
-                # Use rate_2024 if available, else fallback to 3.0
-                rate_val = item.get("rate_2024", 3.0)
+        search_word = desc.strip()
+        for item in TARIFF_DATABASE:
+            item_desc_lower = item["description"].lower()
+            
+            # Match if the query is a substring of the description
+            if search_word in item_desc_lower:
+                r = item.get("rate_2026") or item.get("rate_2024") or 0
                 predictions.append({
                     "code": item["code"],
-                    "confidence": "70%",
-                    "description": f"{item['description']} (AI Analysis: Matched via database keyword scan.)",
-                    "reasoning": "Matched via database keyword scan.",
-                    "duty_rate": rate_val,
-                    "rate": rate_val,
-                    "rate_2026": rate_val,
+                    "confidence": "80%",
+                    "description": f"{item['description']} (AI Search Match)",
+                    "reasoning": "Located via global database tariff mapping.",
+                    "duty_rate": r,
+                    "rate": r,
+                    "rate_2026": r,
                     "chapter": f"Chapter {item['code'][:2]}"
                 })
-                break
-
-    # ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
+                
+                # Allow up to 5 alternative matches to show in the UI
+                if len(predictions) >= 5:
+                    break
+# ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
     if not predictions:
         predictions.append({
             "code": "0000.00.00",
