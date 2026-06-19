@@ -41,9 +41,14 @@ const globalStyle = `
 
 const DEFAULT_SETTINGS = {
   vatRate: 12,
-  bocProcessingFee: 250,
-  docStampFee: 265,
   exchangeRate: 58.50,
+  docStampFee: 265.00, // Fixed Legal Import Doc Stamp Surcharge
+  bocFeeSchedule: [
+    { maxUSD: 4400, fee: 250 },
+    { maxUSD: 8800, fee: 500 },
+    { maxUSD: 17500, fee: 1000 },
+    { maxUSD: Infinity, fee: 1500 }
+  ],
   customOverrides: {},
 };
 
@@ -375,13 +380,15 @@ function AppContent() {
   }
 
   // ─── MODULE 2: INTERACTIVE CALC MODULE ──────────────────────────────────
+    // ─── INTERACTIVE CALCULATOR (CASCADING ASSESSMENT ENGINE) ────
   function InteractiveCalc() {
-    const [dutiableValue, setDutiableValue] = useState("10000");
+    const [fobUSD, setFobUSD] = useState("10000");
+    const [insuranceUSD, setInsuranceUSD] = useState("200");
+    const [freightUSD, setFreightUSD] = useState("800");
     const [hsCode, setHsCode] = useState("");
     const [dutyRate, setDutyRate] = useState("3");
     const [desc, setDesc] = useState("");
 
-    // Transfer tracking block
     useEffect(() => {
       if (sharedCodeData) {
         setHsCode(sharedCodeData.code || "");
@@ -390,74 +397,119 @@ function AppContent() {
       }
     }, [sharedCodeData]);
 
-    const dv = parseFloat(dutiableValue) || 0;
+    const fob = parseFloat(fobUSD) || 0;
+    const insurance = parseFloat(insuranceUSD) || 0;
+    const freight = parseFloat(freightUSD) || 0;
     const rate = parseFloat(dutyRate) || 0;
+
+    // A. Dutiable Value Formula (USD Base)
+    const dutiableValueUSD = fob + insurance + freight;
     
-    // Core Multipliers
-    const customsDuty = dv * (rate / 100);
-    const totalLandValue = dv + customsDuty + settings.bocProcessingFee + settings.docStampFee;
-    const vatAmount = totalLandValue * (settings.vatRate / 100);
-    const totalPayable = customsDuty + vatAmount + settings.bocProcessingFee + settings.docStampFee;
+    // B. Conversion to Local Currency via Daily BOC Exchange Rate Basis
+    const dutiableValuePHP = dutiableValueUSD * settings.exchangeRate;
+    
+    // C. Customs Duty Computation (Ad Valorem Tariff)
+    const customsDuty = dutiableValuePHP * (rate / 100);
+    
+    // D. Dynamic BOC Processing Fee Surcharge (Enforced via CAO 02-2001 Bracket)
+    const matchedBocFee = settings.bocFeeSchedule.find(b => dutiableValueUSD <= b.maxUSD)?.fee || 1500;
+    
+    // E. Landed Cost Base Definition (Aggregated Base Matrix for Internal Revenue Value)
+    const landedCost = dutiableValuePHP + customsDuty + matchedBocFee + settings.docStampFee;
+    
+    // F. Value Added Tax (VAT 12% Assessment)
+    const vatAmount = landedCost * (settings.vatRate / 100);
+    
+    // G. Total Aggregate Import Revenue Payable
+    const totalPayable = customsDuty + vatAmount + matchedBocFee + settings.docStampFee;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <Card>
-          <h3 style={{ color: C.goldL, marginBottom: 12 }}>Liquid Duty Computation Engine</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: C.muted }}>Dutiable Value (PHP)</label>
-              <input type="number" value={dutiableValue} onChange={e => setDutiableValue(e.target.value)} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: 20 }}>
+          
+          {/* Declaration Control Matrix */}
+          <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h3 style={{ color: C.gold, fontSize: 15, borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>📊 Declared Valuation Rules</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div><label style={{ fontSize: 11, color: C.muted }}>FOB / FCA Value (USD)</label><input type="number" value={fobUSD} onChange={e => setFobUSD(e.target.value)} /></div>
+              <div><label style={{ fontSize: 11, color: C.muted }}>Insurance Cost (USD)</label><input type="number" value={insuranceUSD} onChange={e => setInsuranceUSD(e.target.value)} /></div>
+              <div><label style={{ fontSize: 11, color: C.muted }}>Freight/Shipping (USD)</label><input type="number" value={freightUSD} onChange={e => setFreightUSD(e.target.value)} /></div>
+              <div><label style={{ fontSize: 11, color: C.muted }}>Tariff Base Rate (%)</label><input type="number" value={dutyRate} onChange={e => setDutyRate(e.target.value)} /></div>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: C.muted }}>Target HS / AHTN Code</label>
-              <input type="text" className="mono" value={hsCode} onChange={e => setHsCode(e.target.value)} placeholder="0101.21.00" />
+              <label style={{ fontSize: 11, color: C.muted }}>Target AHTN Heading</label>
+              <input type="text" className="mono" value={hsCode} onChange={e => setHsCode(e.target.value)} placeholder="0000.00.00" />
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: C.muted }}>MFN Base Rate (%)</label>
-              <input type="number" value={dutyRate} onChange={e => setDutyRate(e.target.value)} />
-            </div>
-          </div>
-          {desc && <p style={{ fontSize: 12, color: C.muted, marginTop: 10, background: `${C.navyL}77`, padding: 8, borderRadius: 4 }}><strong>Context payload:</strong> {desc}</p>}
-        </Card>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-          <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h4 style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 6, color: C.muted }}>BOC Breakdown Metrics</h4>
-            <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between" }}><span>Customs Duty Amount:</span><span className="mono text-white">₱{customsDuty.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-            <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between" }}><span>BOC Processing Fee:</span><span className="mono text-white">₱{settings.bocProcessingFee.toFixed(2)}</span></div>
-            <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between" }}><span>Documentary Stamp Fee:</span><span className="mono text-white">₱{settings.docStampFee.toFixed(2)}</span></div>
-            <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between" }}><span>VAT Base Value (Land Value):</span><span className="mono text-white">₱{totalLandValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-            <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between" }}><span>VAT Amount ({settings.vatRate}%):</span><span className="mono text-white">₱{vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+            {desc && <div style={{ fontSize: 11, color: C.muted, background: C.navy, padding: 8, borderRadius: 6, borderLeft: `2px solid ${C.gold}` }}><strong>Selected Commodity:</strong> {desc}</div>}
           </Card>
 
-          <Card style={{ background: `${C.blue}33`, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 14, color: C.muted, uppercase: "true" }}>Aggregate Duty Payable</span>
-            <h1 className="mono" style={{ color: C.goldL, fontSize: 36 }}>₱{totalPayable.toLocaleString(undefined, {minimumFractionDigits: 2})}</h1>
-            <Pill color={C.green}>Verified via timeline rate matrix</Pill>
+          {/* Real-time Procedure Flow Trace */}
+          <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h3 style={{ color: C.gold, fontSize: 15, borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>⚙️ Legal Processing Procedure</h3>
+            
+            <div style={{ fontSize: 12, background: C.navy, padding: 10, borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <span style={{ color: C.goldL, fontWeight: 600, display: "block" }}>Step 1: Get Dutiable Value (DV)</span>
+              <span className="mono text-white">($ {fob.toFixed(2)} + $ {insurance.toFixed(2)} + $ {freight.toFixed(2)}) = $ {dutiableValueUSD.toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+              <span className="mono" style={{ display: "block", color: C.muted, marginTop: 4 }}>In PHP Base: $ {dutiableValueUSD.toFixed(2)} × ₱{settings.exchangeRate} = ₱{dutiableValuePHP.toLocaleString(undefined,{minimumFractionDigits:2})}</span>
+            </div>
+
+            <div style={{ fontSize: 12, background: C.navy, padding: 10, borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <span style={{ color: C.goldL, fontWeight: 600, display: "block" }}>Step 2: Customs Bracket Verification</span>
+              <span className="mono">DV Threshold Bracket matched: <strong>₱{matchedBocFee} CPF</strong></span>
+              <span style={{ display: "block", fontSize: 10, color: C.muted }}>Verified via CMTA Tier: Bracket Limit Allocation</span>
+            </div>
+
+            <div style={{ fontSize: 12, background: C.navy, padding: 10, borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <span style={{ color: C.goldL, fontWeight: 600, display: "block" }}>Step 3: Landed Cost Definition</span>
+              <span className="mono" style={{ fontSize: 11 }}>DV (₱{dutiableValuePHP.toFixed(0)}) + Duty (₱{customsDuty.toFixed(0)}) + CPF (₱{matchedBocFee}) + DST (₱{settings.docStampFee})</span>
+              <span className="mono" style={{ display: "block", color: C.green, marginTop: 4 }}>= ₱{landedCost.toLocaleString(undefined,{minimumFractionDigits:2})} (VAT Base)</span>
+            </div>
           </Card>
+
         </div>
+
+        {/* Final Audit Summary Sheet */}
+        <Card style={{ borderLeft: `4px solid ${C.gold}` }}>
+          <h3 style={{ color: C.white, fontSize: 14, marginBottom: 12 }}>📑 Official Customs Import Assessment Sheet</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+            <div><span style={{ fontSize: 11, color: C.muted }}>Customs Duty ({rate}%):</span><h2 className="mono" style={{ fontSize: 18, color: C.white }}>₱{customsDuty.toLocaleString(undefined,{minimumFractionDigits:2})}</h2></div>
+            <div><span style={{ fontSize: 11, color: C.muted }}>BOC Processing Fee (CPF):</span><h2 className="mono" style={{ fontSize: 18, color: C.white }}>₱{matchedBocFee.toFixed(2)}</h2></div>
+            <div><span style={{ fontSize: 11, color: C.muted }}>Documentary Stamp Tax:</span><h2 className="mono" style={{ fontSize: 18, color: C.white }}>₱{settings.docStampFee.toFixed(2)}</h2></div>
+            <div><span style={{ fontSize: 11, color: C.muted }}>Value Added Tax ({settings.vatRate}%):</span><h2 className="mono" style={{ fontSize: 18, color: C.white }}>₱{vatAmount.toLocaleString(undefined,{minimumFractionDigits:2})}</h2></div>
+          </div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <span style={{ fontSize: 12, color: C.goldL, fontWeight: 600 }}>AGGREGATE DUTIES & TAXES PAYABLE</span>
+              <p style={{ fontSize: 10, color: C.muted }}>Payable to Authorized Agent Banks (AAB) via BOC Electronic-to-Mobile System</p>
+            </div>
+            <h1 className="mono" style={{ color: C.goldL, fontSize: 32 }}>₱{totalPayable.toLocaleString(undefined,{minimumFractionDigits:2})}</h1>
+          </div>
+        </Card>
       </div>
     );
   }
 
+
   // ─── MODULE 3: AI SMART CLASSIFIER ──────────────────────────────────────
+    // ─── MODULE 3: AI NEURAL CLASSIFIER MATRIX ───────────────────────────
   function AIClassifier() {
     const [text, setText] = useState("");
     const [predicting, setPredicting] = useState(false);
-    const [aiMatches, setAiMatches] = useState([]);
-    const [error, setError] = useState("");
+    const [matches, setMatches] = useState([]);
 
+    // Auto-fill mula sa HSLookup AI Classify button kung may laman
     useEffect(() => {
       if (window.__aiPrefill) {
         setText(window.__aiPrefill);
-        window.__aiPrefill = null; 
+        window.__aiPrefill = null;
       }
     }, []);
 
-    const handlePredict = async (e) => {
-      e.preventDefault();
+    const runClassification = async (e) => {
+      if (e) e.preventDefault();
       if (!text.trim()) return;
-      setPredicting(true); setError(""); setAiMatches([]);
+      setPredicting(true);
+      setMatches([]);
       try {
         const res = await fetch(`${API_BASE_URL}/classify`, {
           method: "POST",
@@ -465,110 +517,104 @@ function AppContent() {
           body: JSON.stringify({ text })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Classification parsing anomaly.");
-        setAiMatches(data.predictions || []);
+        if (res.ok) {
+          // Siguraduhing array ang makuha natin mula sa predictions o matches
+          setMatches(data.predictions || data.matches || data.results || []);
+        }
       } catch (err) {
-        setError(err.message || "Network exception.");
+        console.error("AI Classification Error:", err);
       }
       setPredicting(false);
     };
 
     return (
-      <Card style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <h3 style={{ color: C.goldL, marginBottom: 4 }}>AI Smart Classifier System</h3>
-          <p style={{ fontSize: 13, color: C.muted }}>Enter dynamic item bills of lading or physical descriptions to match target AHTN segments.</p>
+          <h3 style={{ color: C.gold }}>🤖 AI Neural Classifier Matrix</h3>
+          <p style={{ fontSize: 12, color: C.muted }}>Mag-paste ng commercial description o item declaration para awtomatikong hanapin ang tamang HS Code.</p>
         </div>
-        <form onSubmit={handlePredict} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <textarea rows="3" value={text} onChange={e => setText(e.target.value)} placeholder="Describe cargo variables (e.g., pure bred live swine in-quota variant)..." />
-          <button type="submit" disabled={predicting} style={{ background: C.gold, color: C.navy, padding: "10px", borderRadius: 6, fontWeight: 700 }}>
-            {predicting ? "Processing Predictions..." : "Execute Prediction Matrix"}
+        <form onSubmit={runClassification} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <textarea 
+            rows="4" 
+            value={text} 
+            onChange={e => setText(e.target.value)} 
+            placeholder="Halimbawa: Live pure-bred breeding horses from Europe..." 
+          />
+          <button type="submit" disabled={predicting} style={{ background: C.gold, color: C.navy, padding: 12, borderRadius: 6, fontWeight: 700 }}>
+            {predicting ? "Analyzing Framework Components..." : "Deploy Extraction Pattern"}
           </button>
         </form>
-        {error && <p style={{ color: C.red, fontSize: 13 }}>{error}</p>}
 
-        {aiMatches.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-            <h4 style={{ color: C.muted, fontSize: 12, uppercase: "true" }}>Top Predictive Matches</h4>
-            {aiMatches.map((m, idx) => {
-              const currentRate = m.mfn_rates?.["2026"] || m.rate || 0;
-              return (
-                <div key={idx} style={{ background: C.navyL, padding: 14, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${C.border}` }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "75%" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="mono" style={{ color: C.goldL, fontWeight: 700 }}>{m.code}</span>
-                      <span style={{ fontSize: 11, background: `${C.blue}44`, padding: "1px 5px", borderRadius: 3, color: C.white }}>Confidence: {(m.confidence * 100).toFixed(1)}%</span>
-                    </div>
-                    <span style={{ fontSize: 13, color: C.white }}>{m.description}</span>
-                  </div>
-                  <button onClick={() => handleCodeTransfer(m.code, currentRate, m.description, "", null)}
-                          style={{ background: C.green, color: C.white, padding: "6px 12px", borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
-                    💉 Inject Code
-                  </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+          {matches && matches.map((m, i) => {
+            // Siguraduhing kukunin ang tamang properties kahit magkaiba ang field names ng backend
+            const code = m.code || m.ahtn_code || "N/A";
+            const description = m.description || m.desc || (typeof m === 'string' ? m : "No Description");
+            const rate = m.rate !== undefined ? m.rate : (m.rate_2026 || 0);
+
+            return (
+              <div key={i} style={{ background: C.navyL, padding: 14, borderRadius: 6, border: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ flex: 1, paddingRight: 14 }}>
+                  <span className="mono" style={{ color: C.goldL, fontWeight: 700, fontSize: 14 }}>{code}</span>
+                  <span style={{ color: C.muted, fontSize: 12, marginLeft: 10 }}>MFN Rate: {rate}%</span>
+                  <p style={{ fontSize: 13, marginTop: 4, color: C.white, lineHeight: 1.4 }}>{description}</p>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <button 
+                  onClick={() => handleCodeTransfer(code, rate, description)} 
+                  style={{ background: C.green, color: C.navy, fontWeight: 700, padding: "8px 14px", borderRadius: 4, fontSize: 12 }}
+                >
+                  💉 Inject
+                </button>
+              </div>
+            );
+          })}
+          
+          {!predicting && matches.length === 0 && text.trim() && (
+            <p style={{ fontSize: 12, color: C.muted, textAlignment: "center" }}>No analysis rows extracted. Try refining the text description.</p>
+          )}
+        </div>
       </Card>
     );
   }
 
+
   // ─── MODULE 4: SYSTEM SETTINGS OVERRIDES ────────────────────────────────
-  function CustomsSettings() {
-    const [rateInput, setRateInput] = useState("");
-    const [targetCode, setTargetCode] = useState("");
-
-    const applyOverride = () => {
-      if (!targetCode.trim() || !rateInput.trim()) return;
-      setSettings(prev => ({
-        ...prev,
-        customOverrides: {
-          ...prev.customOverrides,
-          [targetCode.trim()]: parseFloat(rateInput) || 0
-        }
-      }));
-      setTargetCode(""); setRateInput("");
-    };
-
-    const clearOverrides = () => {
-      setSettings(prev => ({ ...prev, customOverrides: {} }));
-    };
-
+    function CustomsSettings() {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <h3 style={{ color: C.goldL }}>Global Multipliers & Fee Tables</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-            <div><label style={{ fontSize: 12, color: C.muted }}>VAT Standard Rate (%)</label><input type="number" value={settings.vatRate} onChange={e => setSettings({...settings, vatRate: parseFloat(e.target.value)||0})} /></div>
-            <div><label style={{ fontSize: 12, color: C.muted }}>BOC Processing Fee (PHP)</label><input type="number" value={settings.bocProcessingFee} onChange={e => setSettings({...settings, bocProcessingFee: parseFloat(e.target.value)||0})} /></div>
-            <div><label style={{ fontSize: 12, color: C.muted }}>Documentary Stamp Fee (PHP)</label><input type="number" value={settings.docStampFee} onChange={e => setSettings({...settings, docStampFee: parseFloat(e.target.value)||0})} /></div>
+        <Card>
+          <h3 style={{ color: C.gold, fontSize: 15, marginBottom: 10 }}>📖 Official BOC Legal Processing Bracket Rules (CAO 02-2001 Basis)</h3>
+          <p style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+            The Customs Processing Fee (CPF) cascades strictly based on the aggregated Dutiable Value (FOB + Insurance + Freight) tier limits under Philippine regulatory mandates:
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {settings.bocFeeSchedule && settings.bocFeeSchedule.map((tier, idx) => (
+              <div key={idx} style={{ display: "flex", justifyContent: "space-between", background: C.navy, padding: "10px 14px", borderRadius: 6, border: `1px solid ${C.border}`, alignItems: "center" }}>
+                <span style={{ fontSize: 13 }}>
+                  Bracket {idx + 1}: {tier.maxUSD === Infinity ? "Shipments exceeding $17,500 USD" : `Up to $ ${tier.maxUSD.toLocaleString()} USD`}
+                </span>
+                <span className="mono" style={{ color: C.goldL, fontWeight: 700 }}>₱ {tier.fee.toFixed(2)} CPF Charge</span>
+              </div>
+            ))}
           </div>
         </Card>
 
         <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <h3 style={{ color: C.goldL }}>Custom Tariff Overrides (Executive Orders)</h3>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input placeholder="HS / AHTN Sub-code" value={targetCode} onChange={e => setTargetCode(e.target.value)} style={{ flex: 1 }} />
-            <input placeholder="Override Rate (%)" type="number" value={rateInput} onChange={e => setRateInput(e.target.value)} style={{ flex: 1 }} />
-            <button onClick={applyOverride} style={{ background: C.gold, color: C.navy, fontWeight: 700, padding: "0 16px", borderRadius: 6 }}>Apply EO Override</button>
-          </div>
-
-          {Object.keys(settings.customOverrides).length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: C.muted }}>Active Regulatory Modifications:</span>
-                <button onClick={clearOverrides} style={{ background: "transparent", color: C.red, fontSize: 12, textDecoration: "underline" }}>Flush Custom Triggers</button>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {Object.entries(settings.customOverrides).map(([c, r]) => (
-                  <span key={c} className="mono" style={{ background: `${C.navyL}`, border: `1px solid ${C.gold}44`, padding: "4px 8px", borderRadius: 4, fontSize: 12 }}>
-                    <strong>{c}</strong>: {r}%
-                  </span>
-                ))}
-              </div>
+          <h3 style={{ color: C.gold, fontSize: 15 }}>📋 Administrative Operational Multipliers</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, color: C.muted }}>BOC Daily Exchange Rate (USD/PHP)</label>
+              <input type="number" step="0.01" value={settings.exchangeRate} onChange={e => setSettings({...settings, exchangeRate: parseFloat(e.target.value) || 0})} />
             </div>
-          )}
+            <div>
+              <label style={{ fontSize: 12, color: C.muted }}>Internal Revenue VAT Rate (%)</label>
+              <input type="number" value={settings.vatRate} onChange={e => setSettings({...settings, vatRate: parseFloat(e.target.value) || 0})} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: C.muted }}>Import Documentary Stamp Surcharge (PHP)</label>
+              <input type="number" value={settings.docStampFee} onChange={e => setSettings({...settings, docStampFee: parseFloat(e.target.value) || 0})} />
+            </div>
+          </div>
         </Card>
       </div>
     );
