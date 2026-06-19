@@ -363,10 +363,16 @@ def home():
 
 # ─── Debug Endpoint ──────────────────────────────────────────────────────
 
+
 @app.get("/debug")
-def debug_info(current_user: User = Depends(get_current_user)):
-    return {
-        "records": len(TARIFF_DATABASE),
-        "sample": TARIFF_DATABASE[:3] if TARIFF_DATABASE else [],
-        "anthropic_key_set": bool(ANTHROPIC_API_KEY)
-    }
+def debug_info():
+    try:
+        records = len(TARIFF_DATABASE) if isinstance(TARIFF_DATABASE, list) else 0
+        sample = TARIFF_DATABASE[:3] if records > 0 else []
+        return {
+            "records": records,
+            "sample": sample,
+            "anthropic_key_set": bool(ANTHROPIC_API_KEY)
+        }
+    except Exception as e:
+        return {"error": str(e), "records": 0}
