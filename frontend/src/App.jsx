@@ -394,11 +394,10 @@ function AppContent() {
       }, 2000);
     };
 
-    const handleAIClassify = (code, description) => {
-      const aiDesc = `${code} – ${description}`;
-      setTab("ai");
-      window.__aiPrefill = aiDesc;
-    };
+const handleAIClassify = (code, description) => {
+    setTab("ai");
+    window.__aiPrefill = description;
+  };
 
     const copyToClipboard = (code) => {
       navigator.clipboard?.writeText(code).catch(() => {});
