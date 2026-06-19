@@ -9,7 +9,7 @@ def parse_tariff(filepath: str) -> list:
     entry_re = re.compile(
         r"^(\d{4}\.\d{2}[\d.]*)\s+"
         r"(.+?)\s+"
-        r"(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s*$"
+        r"(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*\s+(\d+(?:\.\d+)?)\s*/?\w*(?:\s+(\d+(?:\.\d+)?)\s*/?\w*)?\s*$"
     )
     
     skip_patterns = [
@@ -93,9 +93,9 @@ def parse_tariff(filepath: str) -> list:
                 "description": desc,
                 "rate_2024": float(m.group(3)),
                 "rate_2025": float(m.group(4)),
-                "rate_2026": float(m.group(5)),
-                "rate_2027": float(m.group(6)),
-                "rate_2028": float(m.group(7)),
+                "rate_2026": float(m.group(6)),
+                "rate_2027": float(m.group(7)),
+                "rate_2028": float(m.group(8)) if m.group(8) else float(m.group(7)),
                 "quota_type": quota_type,
             })
             
