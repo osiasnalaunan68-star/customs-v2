@@ -214,15 +214,16 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
     if not predictions:
         for item in TARIFF_DATABASE[:10]:
             if desc in item["description"].lower():
-                r = item.get("rate_2026") or item.get("rate_2024") or 0
+                # Use rate_2024 if available, else fallback to 3.0
+                rate_val = item.get("rate_2024", 3.0)
                 predictions.append({
                     "code": item["code"],
                     "confidence": "70%",
-                    "description": item["description"],
+                    "description": f"{item['description']} (AI Analysis: Matched via database keyword scan.)",
                     "reasoning": "Matched via database keyword scan.",
-                    "duty_rate": r,
-                    "rate": r,
-                    "rate_2026": r,
+                    "duty_rate": rate_val,
+                    "rate": rate_val,
+                    "rate_2026": rate_val,
                     "chapter": f"Chapter {item['code'][:2]}"
                 })
                 break
@@ -232,9 +233,11 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         predictions.append({
             "code": "0000.00.00",
             "confidence": "Low",
-            "description": "Unclassified",
+            "description": "Unclassified (AI Analysis: No specific match. Please refine description.)",
             "reasoning": "No specific match. Please refine description.",
             "duty_rate": 0.0,
+            "rate": 0.0,
+            "rate_2026": 0.0,
             "chapter": "Unknown"
         })
 
