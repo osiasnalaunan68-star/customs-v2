@@ -364,6 +364,7 @@ def home():
 # ─── Debug Endpoint ──────────────────────────────────────────────────────
 
 
+
 @app.get("/debug")
 def debug_info():
     try:
