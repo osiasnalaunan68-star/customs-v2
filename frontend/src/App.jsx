@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
@@ -82,25 +82,120 @@ const globalStyle = `
     color: #C8972B;
     border: 1px solid rgba(200,151,43,0.3);
   }
+
+  /* ─── Responsive Base ────────────────────────────────────────────── */
+  html { font-size: 14px; }
+  @media (max-width: 768px) { html { font-size: 13px; } }
+
+  /* ─── Calculator Grid ───────────────────────────────────────────── */
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .calc-inputs { order: 0; }
+  .calc-results { order: 0; }
+
+  /* ─── Nav Tabs ──────────────────────────────────────────────────── */
+  .nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tabs button {
+    flex: 0 0 auto;
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 400;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    color: #8899AA;
+    transition: all 0.2s;
+  }
+  .nav-tabs button.active {
+    color: #F0B429;
+    border-bottom-color: #C8972B;
+    font-weight: 700;
+  }
+
+  /* ─── Table (HS Lookup) ────────────────────────────────────────── */
+  .hs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .hs-table th { text-align: left; padding: 12px 14px; background: #112240; color: #8899AA; border-bottom: 1px solid #1E3A5F; }
+  .hs-table td { padding: 10px 14px; border-bottom: 1px solid #1E3A5F20; transition: background 0.2s; }
+  .hs-table tr.expanded { background: #1B4F9B20; }
+  .hs-table .hier-path { font-size: 11px; color: #8899AA; word-break: break-word; }
+  .hs-table .species-badge { display: inline-flex; align-items: center; gap: 4px; background: #C8972B22; color: #F0B429; border: 1px solid #C8972B55; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+
+  /* ─── Mobile Overrides ──────────────────────────────────────────── */
   @media (max-width: 768px) {
-    .grid-2 { grid-template-columns: 1fr !important; }
-    .header { flex-direction: column; text-align: center; }
-    .card { padding: 12px; }
-    /* Calculator specific: stack columns */
     .calc-grid { grid-template-columns: 1fr !important; }
     .calc-inputs { order: 1; }
     .calc-results { order: 2; }
+
+    /* Nav tabs: horizontal scroll, no wrap */
+    .nav-tabs button { font-size: 12px; padding: 12px 14px; }
+
+    /* HS Lookup: hide Hdg No. & hierarchical path, show only Code + Description + Rate */
+    .hs-table .hdg-col { display: none; }
+    .hs-table .hier-path { display: none; }
+    .hs-table .actions-col { display: none; } /* hide actions on mobile, use expand to show */
+    /* Show expanded actions when row is expanded */
+    .hs-table tr.expanded .actions-col { display: table-cell; }
+    .hs-table tr.expanded .hier-path { display: inline; }
+
+    /* History: hide timestamps */
+    .history-timestamp { display: none; }
+
+    /* AI Classifier: predictions full width (already stacked) */
+    .ai-predictions { flex-direction: column; }
+    .ai-predictions > div { width: 100%; }
+  }
+
+  /* ─── Tablet (768-1023px) ──────────────────────────────────────── */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    /* Nav tabs: shrink font size */
+    .nav-tabs button { font-size: 12px; padding: 12px 16px; }
+    /* HS Lookup: hide breadcrumb path only */
+    .hs-table .hier-path { display: none; }
+    /* Calculator still 2-column but narrower padding */
+    .calc-grid { gap: 12px; }
+    .card { padding: 14px; }
+  }
+
+  /* ─── Sticky Compute Button ────────────────────────────────────── */
+  .sticky-compute {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 12px 20px;
+    background: #0A1628;
+    border-top: 1px solid #1E3A5F;
+    z-index: 1000;
+    display: none;
+    justify-content: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+  }
+  .sticky-compute.visible { display: flex; }
+  .sticky-compute button {
+    width: 100%;
+    max-width: 400px;
+    padding: 14px;
+    background: #C8972B;
+    color: #0A0F1E;
+    font-weight: 700;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+  .sticky-compute button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Touch targets */
+  @media (max-width: 768px) {
+    button, input, select, textarea { min-height: 44px; }
   }
 `;
 
-const DEFAULT_SETTINGS = {
-  vatRate: 12,
-  bocProcessingFee: 250,
-  docStampFee: 265,
-  exchangeRate: 58.50,
-  customOverrides: {},
-};
-
+// ─── Helper Components ──────────────────────────────────────────────────
 function Pill({ color, children }) {
   return (
     <span style={{
@@ -123,16 +218,19 @@ function Card({ children, style }) {
 function SpeciesBadge({ species }) {
   if (!species) return null;
   return (
-    <span style={{
-      background: `${C.gold}22`, color: C.goldL,
-      border: `1px solid ${C.gold}55`,
-      borderRadius: 20, padding: "2px 10px", fontSize: 12,
-      fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4,
-    }}>
+    <span className="species-badge">
       {species.emoji} {species.name}
     </span>
   );
 }
+
+const DEFAULT_SETTINGS = {
+  vatRate: 12,
+  bocProcessingFee: 250,
+  docStampFee: 265,
+  exchangeRate: 58.50,
+  customOverrides: {},
+};
 
 // ─── Main App Content ──────────────────────────────────────────────────
 function AppContent() {
@@ -200,6 +298,8 @@ function AppContent() {
     const [chapters, setChapters] = useState([]);
     const [chapterData, setChapterData] = useState([]);
     const [chapterLoading, setChapterLoading] = useState(false);
+    // Expanded rows (mobile tap)
+    const [expandedRows, setExpandedRows] = useState({});
 
     useEffect(() => {
       const fetchChapters = async () => {
@@ -304,6 +404,10 @@ function AppContent() {
       navigator.clipboard?.writeText(code).catch(() => {});
     };
 
+    const toggleRow = (rowKey) => {
+      setExpandedRows(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
+    };
+
     const displayData = results.length > 0 ? results : chapterData;
     const totalPages = Math.ceil(displayData.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -365,14 +469,14 @@ function AppContent() {
           <>
             <Card style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ overflow: "auto", maxHeight: 500 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <table className="hs-table">
                   <thead>
-                    <tr style={{ background: C.navyL, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
-                      <th style={{ padding: "12px 14px", textAlign: "left", width: "15%" }}>Hdg No.</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", width: "15%" }}>AHTN Code</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", width: "40%" }}>Description</th>
-                      <th style={{ padding: "12px 14px", textAlign: "left", width: "10%" }}>2026 MFN</th>
-                      <th style={{ padding: "12px 14px", textAlign: "center", width: "20%" }}>Actions</th>
+                    <tr>
+                      <th className="hdg-col" style={{ width: "15%" }}>Hdg No.</th>
+                      <th style={{ width: "15%" }}>AHTN Code</th>
+                      <th style={{ width: "40%" }}>Description</th>
+                      <th style={{ width: "10%" }}>2026 MFN</th>
+                      <th className="actions-col" style={{ width: "20%", textAlign: "center" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -387,6 +491,8 @@ function AppContent() {
                             </td>
                           </tr>
                           {items.map((item, idx) => {
+                            const rowKey = `${heading}-${idx}-${item.code}`;
+                            const isExpanded = expandedRows[rowKey];
                             const hasOverride = settings.customOverrides[item.code] !== undefined;
                             const finalRate = hasOverride ? settings.customOverrides[item.code] : (item.rate_2024 || item.rate_2026 || item.mfn_rates?.["2026"] || 0);
                             const indent = item.code?.length > 4 ? 20 : 0;
@@ -403,21 +509,20 @@ function AppContent() {
 
                             return (
                               <tr
-                                key={idx}
-                                style={{
-                                  borderBottom: `1px solid ${C.border}20`,
-                                  transition: 'background 0.2s ease'
-                                }}
+                                key={rowKey}
+                                className={isExpanded ? 'expanded' : ''}
+                                onClick={() => toggleRow(rowKey)}
+                                style={{ cursor: 'pointer', borderBottom: `1px solid ${C.border}20` }}
                                 onMouseEnter={(e) => e.currentTarget.style.background = `${C.blue}15`}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                               >
-                                <td className="mono" style={{ padding: "10px 14px", color: C.muted }}>
+                                <td className="hdg-col mono" style={{ padding: "10px 14px", color: C.muted }}>
                                   {displayHeading}
                                 </td>
                                 <td className="mono" style={{ padding: "10px 14px", paddingLeft: paddingLeft, color: C.goldL, fontWeight: 600 }}>
                                   {displayCode}
                                   <button
-                                    onClick={() => copyToClipboard(displayCode)}
+                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(displayCode); }}
                                     style={{
                                       background: 'transparent',
                                       color: C.muted,
@@ -435,7 +540,7 @@ function AppContent() {
                                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                     <span style={{ fontSize: 13 }}>{displayDesc}</span>
                                     {item.hierarchical_path && (
-                                      <span style={{ fontSize: 11, color: C.muted, wordBreak: 'break-word' }}>
+                                      <span className="hier-path">
                                         {item.hierarchical_path.split(' > ').map((part, i, arr) => (
                                           <span key={i}>
                                             {part}
@@ -449,15 +554,45 @@ function AppContent() {
                                         <SpeciesBadge species={item.species} />
                                       </div>
                                     )}
+                                    {/* Expanded details on mobile (actions appear) */}
+                                    <div className="actions-col" style={{ display: 'none', marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleInject(displayCode, finalRate, displayDesc, item.hierarchical_path, item.species); }}
+                                        style={{
+                                          padding: "4px 10px",
+                                          background: isInjected ? C.green : C.blue,
+                                          color: isInjected ? C.navy : C.white,
+                                          borderRadius: 4,
+                                          fontSize: 11,
+                                          fontWeight: 600,
+                                          minWidth: 60,
+                                        }}
+                                      >
+                                        {isInjected ? '✅' : '💉'}
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleAIClassify(displayCode, displayDesc); }}
+                                        style={{
+                                          padding: "4px 10px",
+                                          background: C.gold,
+                                          color: C.navy,
+                                          borderRadius: 4,
+                                          fontSize: 11,
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        🤖
+                                      </button>
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="mono" style={{ padding: "10px 14px", paddingLeft: paddingLeft, fontSize: 14 }}>
                                   {finalRate}% {hasOverride && <span style={{ color: C.gold, display: "block", fontSize: 10 }}>(EO)</span>}
                                 </td>
-                                <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                                <td className="actions-col" style={{ padding: "10px 14px", textAlign: "center" }}>
                                   <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" }}>
                                     <button
-                                      onClick={() => handleInject(displayCode, finalRate, displayDesc, item.hierarchical_path, item.species)}
+                                      onClick={(e) => { e.stopPropagation(); handleInject(displayCode, finalRate, displayDesc, item.hierarchical_path, item.species); }}
                                       style={{
                                         padding: "4px 10px",
                                         background: isInjected ? C.green : C.blue,
@@ -466,13 +601,12 @@ function AppContent() {
                                         fontSize: 11,
                                         fontWeight: 600,
                                         minWidth: 60,
-                                        transition: 'all 0.3s ease'
                                       }}
                                     >
                                       {isInjected ? '✅' : '💉'}
                                     </button>
                                     <button
-                                      onClick={() => handleAIClassify(displayCode, displayDesc)}
+                                      onClick={(e) => { e.stopPropagation(); handleAIClassify(displayCode, displayDesc); }}
                                       style={{
                                         padding: "4px 10px",
                                         background: C.gold,
@@ -481,7 +615,6 @@ function AppContent() {
                                         fontSize: 11,
                                         fontWeight: 600,
                                       }}
-                                      title="AI Classify"
                                     >
                                       🤖
                                     </button>
@@ -565,6 +698,21 @@ function AppContent() {
       landed: false
     });
     const [entryType, setEntryType] = useState("");
+
+    // Sticky compute button observer
+    const computeRef = useRef(null);
+    const [showSticky, setShowSticky] = useState(false);
+
+    useEffect(() => {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          setShowSticky(!entry.isIntersecting);
+        },
+        { threshold: 0, rootMargin: '0px 0px -100px 0px' } // trigger when button leaves viewport
+      );
+      if (computeRef.current) observer.observe(computeRef.current);
+      return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -652,7 +800,7 @@ function AppContent() {
     const valuation = calcResult?.valuation || {};
 
     return (
-      <div className="calc-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div className="calc-grid">
         <div className="calc-inputs" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -739,9 +887,12 @@ function AppContent() {
                 )}
               </div>
 
-              <button onClick={handleCalculate} disabled={calcLoading} style={{ background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600 }}>
-                {calcLoading ? '⏳ Computing...' : '🚀 Compute Taxes'}
-              </button>
+              {/* The compute button that will be observed */}
+              <div ref={computeRef}>
+                <button onClick={handleCalculate} disabled={calcLoading} style={{ background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600, width: '100%' }}>
+                  {calcLoading ? '⏳ Computing...' : '🚀 Compute Taxes'}
+                </button>
+              </div>
               <button onClick={() => setTab("settings")} style={{ background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>⚙️ Edit Settings</button>
             </div>
           </Card>
@@ -877,11 +1028,18 @@ function AppContent() {
             </div>
           </Card>
         </div>
+
+        {/* Sticky Compute Button (mobile) */}
+        <div className={`sticky-compute ${showSticky ? 'visible' : ''}`}>
+          <button onClick={handleCalculate} disabled={calcLoading}>
+            {calcLoading ? '⏳ Computing...' : '🚀 Compute Taxes'}
+          </button>
+        </div>
       </div>
     );
   }
 
-  // ─── AI Classifier (with top-3 results) ─────────────────────────────
+  // ─── AI Classifier ─────────────────────────────────────────────────────
   function AIClassifier() {
     const [text, setText] = useState("");
     const [predicting, setPredicting] = useState(false);
@@ -984,7 +1142,7 @@ function AppContent() {
           </button>
         </form>
         {matches.length > 0 && (
-          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="ai-predictions" style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
             {matches.map((match, idx) => (
               <div key={idx} style={{ background: C.navyL, padding: 14, borderRadius: 8, border: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
@@ -1167,7 +1325,7 @@ function AppContent() {
           <Card key={idx} style={{ padding: "12px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
               <div>
-                <span style={{ fontSize: 13, color: C.muted }}>{new Date(entry.timestamp).toLocaleString()}</span>
+                <span className="history-timestamp" style={{ fontSize: 13, color: C.muted }}>{new Date(entry.timestamp).toLocaleString()}</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: C.gold, marginLeft: 12 }}>{entry.ahtn_code || "N/A"}</span>
                 <span style={{ fontSize: 13, color: C.white, marginLeft: 8 }}>₱{entry.total_tax_payable?.toLocaleString()}</span>
               </div>
@@ -1219,14 +1377,14 @@ function AppContent() {
           </div>
         </div>
         <div style={{ background: C.navyL, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", padding: "0 24px" }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                padding: "14px 20px", fontSize: 13, fontWeight: tab === t.id ? 700 : 400,
-                color: tab === t.id ? C.goldL : C.muted, background: "transparent",
-                borderBottom: tab === t.id ? `2px solid ${C.gold}` : "2px solid transparent"
-              }}>{t.label}</button>
-            ))}
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px" }}>
+            <div className="nav-tabs">
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)} className={tab === t.id ? 'active' : ''}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div style={{ flex: 1, maxWidth: 1200, margin: "0 auto", width: "100%", padding: "24px" }}>
