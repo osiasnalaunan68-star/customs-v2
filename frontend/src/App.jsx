@@ -37,6 +37,16 @@ const globalStyle = `
   button { cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s; }
   button:hover { filter: brightness(1.1); }
   .mono { font-family: 'JetBrains Mono', monospace; }
+
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr !important; }
+    .header { flex-direction: column; text-align: center; }
+    .card { padding: 12px; }
+    /* Calculator specific: stack columns */
+    .calc-grid { grid-template-columns: 1fr !important; }
+    .calc-inputs { order: 1; }
+    .calc-results { order: 2; }
+  }
 `;
 
 const DEFAULT_SETTINGS = {
@@ -85,6 +95,37 @@ function AppContent() {
   const { token, logout } = useAuth();
   const [tab, setTab] = useState("calc");
   const [sharedCodeData, setSharedCodeData] = useState(null);
+
+  const [history, setHistory] = useState(() => {
+    const saved = localStorage.getItem("boc_calc_history");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const saveToHistory = (entry) => {
+    const newHistory = [entry, ...history];
+    setHistory(newHistory);
+    localStorage.setItem("boc_calc_history", JSON.stringify(newHistory));
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem("boc_calc_history");
+  };
+
+  const loadHistoryEntry = (entry) => {
+    setSharedCodeData({ 
+      code: entry.ahtn_code || "0000.00.00", 
+      rate: entry.rate_of_duty || 0, 
+      desc: entry.description || "From history", 
+      path: "", 
+      species: null,
+      fob: entry.fob_fca_value || 0,
+      freight: entry.freight_cost || 0,
+      insurance: entry.insurance_cost || 0
+    });
+    setTab("calc");
+  };
+
   const navigate = useNavigate();
 
   const [settings, setSettings] = useState(() => {
@@ -211,7 +252,17 @@ function AppContent() {
     };
 
     const handleAIClassify = (code, description) => {
-      const aiDesc = `${code} – ${description}`;
+      const aiDesc = `${code} – ${description}
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr !important; }
+    .header { flex-direction: column; text-align: center; }
+    .card { padding: 12px; }
+    /* Calculator specific: stack columns */
+    .calc-grid { grid-template-columns: 1fr !important; }
+    .calc-inputs { order: 1; }
+    .calc-results { order: 2; }
+  }
+`;
       setTab("ai");
       window.__aiPrefill = aiDesc;
     };
@@ -466,6 +517,7 @@ function AppContent() {
   function InteractiveCalc() {
     const [fob, setFob] = useState(sharedCodeData?.fob || 10000);
     const [freight, setFreight] = useState(sharedCodeData?.freight || 500);
+    const [insurance, setInsurance] = useState(sharedCodeData?.insurance || 0);
     const [dangerous, setDangerous] = useState(sharedCodeData?.dangerous || false);
     const [dutyRate, setDutyRate] = useState(sharedCodeData?.rate || 5);
     const [hsCode, setHsCode] = useState(sharedCodeData?.code || "0000.00.00");
@@ -474,6 +526,7 @@ function AppContent() {
     const [species, setSpecies] = useState(sharedCodeData?.species || null);
     const [fetchingRate, setFetchingRate] = useState(false);
     const [calcResult, setCalcResult] = useState(null);
+    const [entryType, setEntryType] = useState("");
     const [calcLoading, setCalcLoading] = useState(false);
     const [expandedSections, setExpandedSections] = useState({
       duty: false,
@@ -490,6 +543,7 @@ function AppContent() {
         setSpecies(sharedCodeData.species || null);
         if (sharedCodeData.fob !== undefined) setFob(sharedCodeData.fob);
         if (sharedCodeData.freight !== undefined) setFreight(sharedCodeData.freight);
+        if (sharedCodeData.insurance !== undefined) setInsurance(sharedCodeData.insurance);
         if (sharedCodeData.dangerous !== undefined) setDangerous(sharedCodeData.dangerous);
       }
     }, [sharedCodeData]);
@@ -534,6 +588,20 @@ function AppContent() {
         const data = await res.json();
         if (res.ok) {
           setCalcResult(data);
+            if (data.assessment && data.assessment.total_tax_payable) {
+              saveToHistory({
+                timestamp: Date.now(),
+                ahtn_code: hsCode,
+                fob_fca_value: parseFloat(fob),
+                freight_cost: parseFloat(freight),
+                insurance_cost: parseFloat(insurance) || 0,
+                rate_of_duty: parseFloat(dutyRate),
+                total_tax_payable: data.assessment.total_tax_payable,
+                total_landed_cost: data.assessment.total_landed_cost,
+                description: legalDesc
+              });
+            }
+            setEntryType(data.entry_type || "");
         } else {
           alert(data.detail || "Calculation failed");
         }
@@ -1058,11 +1126,52 @@ function AppContent() {
     );
   }
 
+  
+  // ─── History Component ──────────────────────────────────────────────
+  function HistoryTab() {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2 style={{ color: C.gold, margin: 0 }}>📜 Computation History</h2>
+            {history.length > 0 && (
+              <button onClick={clearHistory} style={{ background: C.red, color: C.white, padding: "6px 14px", borderRadius: 4, fontSize: 12 }}>
+                Clear All
+              </button>
+            )}
+          </div>
+          <p style={{ color: C.muted, fontSize: 13 }}>Last 50 calculations saved locally</p>
+        </Card>
+        {history.length === 0 && (
+          <Card>
+            <p style={{ color: C.muted, textAlign: "center" }}>No calculations saved yet. Compute taxes to start building history.</p>
+          </Card>
+        )}
+        {history.slice(0, 50).map((entry, idx) => (
+          <Card key={idx} style={{ padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <span style={{ fontSize: 13, color: C.muted }}>{new Date(entry.timestamp).toLocaleString()}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.gold, marginLeft: 12 }}>{entry.ahtn_code || "N/A"}</span>
+                <span style={{ fontSize: 13, color: C.white, marginLeft: 8 }}>₱{entry.total_tax_payable?.toLocaleString()}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => loadHistoryEntry(entry)} style={{ background: C.blue, color: C.white, padding: "4px 12px", borderRadius: 4, fontSize: 12 }}>↻ Load</button>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+
   const TABS = [
     { id: "lookup",    label: "🔍 HS Lookup" },
     { id: "calc",      label: "🧮 Calculator" },
     { id: "ai",        label: "🤖 AI Classifier" },
     { id: "settings",  label: "⚙️ Settings" },
+    { id: "history",  label: "📜 History" },
   ];
 
   const VIEWS = { lookup: <HSLookup />, calc: <InteractiveCalc />, ai: <AIClassifier />, settings: <CustomsSettings /> };

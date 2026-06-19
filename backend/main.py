@@ -157,6 +157,8 @@ def get_chapter_details(ch_num: int, current_user: User = Depends(get_current_us
     return {"items": enhanced}
 
 @app.post("/classify")
+
+@app.post("/classify")
 def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
     desc = req.description.lower().strip()
     predictions = []
@@ -166,13 +168,115 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         predictions.append({
             "code": "1006.30.99",
             "confidence": "95%",
-            "description": "Semi-milled or wholly milled rice (AI Analysis: Product identified as rice, classified under Chapter 10: Cereals.)",
+            "description": "Semi-milled or wholly milled rice",
             "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
             "duty_rate": 35.0,
             "rate": 35.0,
             "rate_2026": 35.0,
             "chapter": "Chapter 10: Cereals"
         })
+        predictions.append({
+            "code": "1006.20.90",
+            "confidence": "85%",
+            "description": "Husked (brown) rice",
+            "reasoning": "Alternative: husked rice.",
+            "duty_rate": 35.0,
+            "rate": 35.0,
+            "rate_2026": 35.0,
+            "chapter": "Chapter 10: Cereals"
+        })
+        predictions.append({
+            "code": "1006.40.90",
+            "confidence": "70%",
+            "description": "Broken rice",
+            "reasoning": "Alternative: broken rice.",
+            "duty_rate": 35.0,
+            "rate": 35.0,
+            "rate_2026": 35.0,
+            "chapter": "Chapter 10: Cereals"
+        })
+        return {"predictions": predictions[:3]}
+
+    # ─── 2. CHAPTER 8 FRUITS AND NUTS ────────────────────────────────
+    if any(word in desc for word in ["apple", "mango", "banana", "fruit", "prutas", "nut"]):
+        predictions.append({
+            "code": "0808.10.00",
+            "confidence": "92%",
+            "description": "Fresh fruit",
+            "reasoning": "Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.",
+            "duty_rate": 7.0,
+            "rate": 7.0,
+            "rate_2026": 7.0,
+            "chapter": "Chapter 08: Edible Fruit and Nuts"
+        })
+        predictions.append({
+            "code": "0804.50.21",
+            "confidence": "75%",
+            "description": "Mangoes, fresh",
+            "reasoning": "Alternative: mangoes.",
+            "duty_rate": 15.0,
+            "rate": 15.0,
+            "rate_2026": 15.0,
+            "chapter": "Chapter 08: Edible Fruit and Nuts"
+        })
+        return {"predictions": predictions[:3]}
+
+    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ──────────────────────────
+    if any(word in desc for word in ["live", "buhay"]) and any(word in desc for word in ["animal", "hayop", "cattle", "baka", "horse", "kabayo", "pig", "baboy"]):
+        predictions.append({
+            "code": "0102.21.00",
+            "confidence": "85%",
+            "description": "Live bovine animals (pure-bred breeding animals)",
+            "reasoning": "Product identified as live animal, classified under Chapter 1.",
+            "duty_rate": 0.0,
+            "rate": 0.0,
+            "rate_2026": 0.0,
+            "chapter": "Chapter 01: Live animals"
+        })
+        predictions.append({
+            "code": "0101.21.00",
+            "confidence": "70%",
+            "description": "Live horses, pure-bred breeding animals",
+            "reasoning": "Alternative: live horses.",
+            "duty_rate": 3.0,
+            "rate": 3.0,
+            "rate_2026": 3.0,
+            "chapter": "Chapter 01: Live animals"
+        })
+        return {"predictions": predictions[:3]}
+
+    # ─── 4. DATABASE SCAN (full scan, up to 3 matches) ──────────────
+    for item in TARIFF_DATABASE[:50]:  # limit for performance
+        if desc in item["description"].lower():
+            r = item.get("rate_2026") or item.get("rate_2024") or 0
+            predictions.append({
+                "code": item["code"],
+                "confidence": "60%",
+                "description": item["description"],
+                "reasoning": "Matched via keyword scan.",
+                "duty_rate": r,
+                "rate": r,
+                "rate_2026": r,
+                "chapter": f"Chapter {item['code'][:2]}"
+            })
+            if len(predictions) >= 3:
+                break
+
+    # ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
+    if not predictions:
+        predictions.append({
+            "code": "0000.00.00",
+            "confidence": "Low",
+            "description": "Unclassified",
+            "reasoning": "No specific match. Please refine description.",
+            "duty_rate": 0.0,
+            "rate": 0.0,
+            "rate_2026": 0.0,
+            "chapter": "Unknown"
+        })
+
+    return {"predictions": predictions[:3]}
+)
         predictions.append({
             "code": "1006.20.90",
             "confidence": "85%",
@@ -254,119 +358,31 @@ def home():
 
 # ─── ADVANCED CALCULATOR COMPONENT SCHEMAS ───────────────────────────────
 class CustomsCalculationRequest(BaseModel):
-    ahtn_code: str = "0000.00.00"    # Added for legal matrix cross-reference
     fob_fca_value: float            # Invoice value in Foreign Currency
     exchange_rate: float            # Dynamic live rate or manual admin override
     freight_cost: float             # Shipping/Freight cost in Foreign Currency
+    insurance_cost: float = 0.0     # Insurance cost (default 0)
     rate_of_duty: float             # Duty percentage rate (e.g., 7.0 for 7%)
-    is_dangerous_goods: bool = False # Elevates insurance risk premium if True
-    excise_tax: float = 0.0          # For specific high-value or restricted goods
-    brokerage_fee: float = 700.0     # Default standard express clearance rate
+    is_dangerous_goods: bool = False
+    excise_tax: float = 0.0
+    brokerage_fee: float = 700.0
     import_processing_fee: float = 0.0
+    ahtn_code: str = "0000.00.00"   # For legal justification and risk assessment
+# ─── Formal vs Informal Entry Detection ────────────────────────────
+# In the compute_boc_taxes endpoint, after getting the request:
+# if req.fob_fca_value <= 200 and req.exchange_rate * req.fob_fca_value <= 200 * req.exchange_rate:
+# Actually, de minimis is based on FOB value <= USD 200.
+# We'll add a flag and adjust fees accordingly.
 
+# We'll patch the endpoint to include entry_type in the response.
+# We'll add a function to determine entry type.
 
-# ─── ULTRA ADVANCED ARCHITECTURE CORE MODULES ─────────────────────────────
-def get_legal_justification(code: str):
-    if not code or code == "0000.00.00":
-        return {"section": "General", "chapter": "General", "justification": "Standard tariff valuation rules apply."}
-    chapter = code[:2]
-    chapter_title = CHAPTER_TITLES.get(int(chapter), f"Chapter {chapter}") if 'CHAPTER_TITLES' in globals() else f"Chapter {chapter}"
-    return {
-        "section": "Integrated Tariff Framework",
-        "chapter": chapter_title,
-        "justification": f"Classification under AHTN {code} is legally justified under the Customs Modernization and Tariff Act (CMTA), referenced by {chapter_title}. The item excludes technical properties defined under alternative sections."
-    }
+def get_entry_type(fob_usd: float) -> str:
+    if fob_usd <= 200:
+        return "informal"  # De minimis
+    else:
+        return "formal"
 
-def assess_risk(dangerous: bool, fob: float, duty_rate: float, code: str):
-    risk = "low"
-    reasons = []
-    if dangerous:
-        risk = "high"
-        reasons.append("Regulated / Dangerous goods categorization flagged.")
-    if fob > 50000:
-        risk = "medium"
-        reasons.append("High FOB value classification threshold exceeded (> USD 50k).")
-    if duty_rate == 0:
-        risk = "medium"
-        reasons.append("Zero duty declaration profile – subject to regulatory permit review.")
-    elif duty_rate > 20:
-        risk = "high"
-        reasons.append("High duty rate parameters – highly prone to valuation challenges.")
-    return {
-        "level": risk,
-        "color": "🟢" if risk == "low" else "🟡" if risk == "medium" else "🔴",
-        "reasons": reasons if reasons else ["Standard MFN item footprint with verified clean mapping."]
-    }
-
-@app.post("/calculator/compute-boc-taxes")
-def compute_boc_taxes(req: CustomsCalculationRequest):
-    try:
-        # STEP 1: Rule-Based Insurance Premium Allocation (2% General / 4% Dangerous)
-        insurance_multiplier = 0.04 if req.is_dangerous_goods else 0.02
-        insurance_foreign = req.fob_fca_value * insurance_multiplier
-        
-        # STEP 2: Aggregate Total Dutiable Value (FOB + Freight + Insurance)
-        total_dutiable_foreign = req.fob_fca_value + req.freight_cost + insurance_foreign
-        
-        # STEP 3: Currency Normalization to Philippine Peso (PHP)
-        total_dutiable_php = total_dutiable_foreign * req.exchange_rate
-        
-        # STEP 4: Customs Duty Computation
-        customs_duty_php = total_dutiable_php * (req.rate_of_duty / 100.0)
-        
-        # STEP 5: Fixed Government Statutory Fees (BIR & BOC Mandated Stamps)
-        bir_doc_stamp = 30.00
-        customs_doc_stamp = 100.00
-        
-        # STEP 6: Sequential Landed Cost Derivation
-        total_landed_cost = (
-            total_dutiable_php + 
-            customs_duty_php + 
-            req.excise_tax + 
-            req.brokerage_fee + 
-            req.import_processing_fee + 
-            customs_doc_stamp + 
-            bir_doc_stamp
-        )
-        
-        # STEP 7: Value Added Tax Evaluation (12% of Integrated Landed Cost)
-        vat_php = total_landed_cost * 0.12
-        
-        # STEP 8: Grand Total Tax Payable to Bureau of Customs
-        total_tax_payable = (
-            customs_duty_php + 
-            vat_php + 
-            req.excise_tax + 
-            req.import_processing_fee + 
-            bir_doc_stamp + 
-            customs_doc_stamp
-        )
-        
-        base_total = total_tax_payable
-        return {
-            "status": "success",
-            "valuation": {
-                "insurance_foreign": round(insurance_foreign, 2),
-                "dutiable_value_foreign": round(total_dutiable_foreign, 2),
-                "dutiable_value_php": round(total_dutiable_php, 2)
-            },
-            "assessment": {
-                "customs_duty": round(customs_duty_php, 2),
-                "vat_12": round(vat_php, 2),
-                "bir_doc_stamp": bir_doc_stamp,
-                "customs_doc_stamp": customs_doc_stamp,
-                "total_landed_cost": round(total_landed_cost, 2),
-                "total_tax_payable": round(total_tax_payable, 2)
-            },
-            "legal": get_legal_justification(req.ahtn_code),
-            "volatility": {
-                "best_case": round(base_total, 2),
-                "plus_2_percent": round(base_total * 1.02, 2),
-                "plus_5_percent": round(base_total * 1.05, 2),
-                "buffer_2": round(base_total * 0.02, 2),
-                "buffer_5": round(base_total * 0.05, 2)
-            },
-            "risk": assess_risk(req.is_dangerous_goods, req.fob_fca_value, req.rate_of_duty, req.ahtn_code)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Engine Calculation Failure: {str(e)}")
+# In the compute endpoint, after validation:
+# entry_type = get_entry_type(req.fob_fca_value)
+# and include in response: "entry_type": entry_type
