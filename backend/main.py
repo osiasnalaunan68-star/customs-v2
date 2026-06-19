@@ -166,17 +166,21 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         predictions.append({
             "code": "1006.30.99",
             "confidence": "95%",
-            "description": "Semi-milled or wholly milled rice",
+            "description": "Semi-milled or wholly milled rice (AI Analysis: Product identified as rice, classified under Chapter 10: Cereals.)",
             "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
             "duty_rate": 35.0,
+            "rate": 35.0,
+            "rate_2026": 35.0,
             "chapter": "Chapter 10: Cereals"
         })
         predictions.append({
             "code": "1006.20.90",
             "confidence": "85%",
-            "description": "Husked (brown) rice",
+            "description": "Husked (brown) rice (AI Analysis: Alternative: husked rice.)",
             "reasoning": "Alternative: husked rice.",
             "duty_rate": 35.0,
+            "rate": 35.0,
+            "rate_2026": 35.0,
             "chapter": "Chapter 10: Cereals"
         })
 
@@ -185,9 +189,11 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         predictions.append({
             "code": "0808.10.00",
             "confidence": "92%",
-            "description": "Fresh fruit",
+            "description": "Fresh fruit (AI Analysis: Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.)",
             "reasoning": "Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.",
             "duty_rate": 7.0,
+            "rate": 7.0,
+            "rate_2026": 7.0,
             "chapter": "Chapter 08: Edible Fruit and Nuts"
         })
 
@@ -196,9 +202,11 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         predictions.append({
             "code": "0102.21.00",
             "confidence": "85%",
-            "description": "Live bovine animals (pure-bred breeding animals)",
+            "description": "Live bovine animals (pure-bred breeding animals) (AI Analysis: Product identified as live animal, classified under Chapter 1.)",
             "reasoning": "Product identified as live animal, classified under Chapter 1.",
             "duty_rate": 0.0,
+            "rate": 0.0,
+            "rate_2026": 0.0,
             "chapter": "Chapter 01: Live animals"
         })
 
@@ -206,12 +214,15 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
     if not predictions:
         for item in TARIFF_DATABASE[:10]:
             if desc in item["description"].lower():
+                r = item.get("rate_2026") or item.get("rate_2024") or 0
                 predictions.append({
                     "code": item["code"],
                     "confidence": "70%",
                     "description": item["description"],
                     "reasoning": "Matched via database keyword scan.",
-                    "duty_rate": item.get("rate_2024", 3.0),
+                    "duty_rate": r,
+                    "rate": r,
+                    "rate_2026": r,
                     "chapter": f"Chapter {item['code'][:2]}"
                 })
                 break
