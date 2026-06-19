@@ -251,3 +251,77 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
 @app.get("/")
 def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
+
+# ─── ADVANCED CALCULATOR COMPONENT SCHEMAS ───────────────────────────────
+class CustomsCalculationRequest(BaseModel):
+    fob_fca_value: float            # Invoice value in Foreign Currency
+    exchange_rate: float            # Dynamic live rate or manual admin override
+    freight_cost: float             # Shipping/Freight cost in Foreign Currency
+    rate_of_duty: float             # Duty percentage rate (e.g., 7.0 for 7%)
+    is_dangerous_goods: bool = False # Elevates insurance risk premium if True
+    excise_tax: float = 0.0          # For specific high-value or restricted goods
+    brokerage_fee: float = 700.0     # Default standard express clearance rate
+    import_processing_fee: float = 0.0
+
+@app.post("/calculator/compute-boc-taxes")
+def compute_boc_taxes(req: CustomsCalculationRequest):
+    try:
+        # STEP 1: Rule-Based Insurance Premium Allocation (2% General / 4% Dangerous)
+        insurance_multiplier = 0.04 if req.is_dangerous_goods else 0.02
+        insurance_foreign = req.fob_fca_value * insurance_multiplier
+        
+        # STEP 2: Aggregate Total Dutiable Value (FOB + Freight + Insurance)
+        total_dutiable_foreign = req.fob_fca_value + req.freight_cost + insurance_foreign
+        
+        # STEP 3: Currency Normalization to Philippine Peso (PHP)
+        total_dutiable_php = total_dutiable_foreign * req.exchange_rate
+        
+        # STEP 4: Customs Duty Computation
+        customs_duty_php = total_dutiable_php * (req.rate_of_duty / 100.0)
+        
+        # STEP 5: Fixed Government Statutory Fees (BIR & BOC Mandated Stamps)
+        bir_doc_stamp = 30.00
+        customs_doc_stamp = 100.00
+        
+        # STEP 6: Sequential Landed Cost Derivation
+        total_landed_cost = (
+            total_dutiable_php + 
+            customs_duty_php + 
+            req.excise_tax + 
+            req.brokerage_fee + 
+            req.import_processing_fee + 
+            customs_doc_stamp + 
+            bir_doc_stamp
+        )
+        
+        # STEP 7: Value Added Tax Evaluation (12% of Integrated Landed Cost)
+        vat_php = total_landed_cost * 0.12
+        
+        # STEP 8: Grand Total Tax Payable to Bureau of Customs
+        total_tax_payable = (
+            customs_duty_php + 
+            vat_php + 
+            req.excise_tax + 
+            req.import_processing_fee + 
+            bir_doc_stamp + 
+            customs_doc_stamp
+        )
+        
+        return {
+            "status": "success",
+            "valuation": {
+                "insurance_foreign": round(insurance_foreign, 2),
+                "dutiable_value_foreign": round(total_dutiable_foreign, 2),
+                "dutiable_value_php": round(total_dutiable_php, 2)
+            },
+            "assessment": {
+                "customs_duty": round(customs_duty_php, 2),
+                "vat_12": round(vat_php, 2),
+                "bir_doc_stamp": bir_doc_stamp,
+                "customs_doc_stamp": customs_doc_stamp,
+                "total_landed_cost": round(total_landed_cost, 2),
+                "total_tax_payable": round(total_tax_payable, 2)
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Engine Calculation Failure: {str(e)}")

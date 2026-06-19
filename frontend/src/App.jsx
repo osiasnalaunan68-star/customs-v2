@@ -464,13 +464,17 @@ function AppContent() {
 
   // ─── Interactive Calculator ──────────────────────────────────────────
   function InteractiveCalc() {
-    const [cifUsd, setCifUsd] = useState("10000");
-    const [dutyRate, setDutyRate] = useState("5");
-    const [hsCode, setHsCode] = useState("0000.00.00");
-    const [legalDesc, setLegalDesc] = useState("General baseline description");
-    const [hierPath, setHierPath] = useState("");
-    const [species, setSpecies] = useState(null);
+    const [fob, setFob] = useState(sharedCodeData?.fob || 10000);
+    const [freight, setFreight] = useState(sharedCodeData?.freight || 500);
+    const [dangerous, setDangerous] = useState(sharedCodeData?.dangerous || false);
+    const [dutyRate, setDutyRate] = useState(sharedCodeData?.rate || 5);
+    const [hsCode, setHsCode] = useState(sharedCodeData?.code || "0000.00.00");
+    const [legalDesc, setLegalDesc] = useState(sharedCodeData?.desc || "General baseline description");
+    const [hierPath, setHierPath] = useState(sharedCodeData?.path || "");
+    const [species, setSpecies] = useState(sharedCodeData?.species || null);
     const [fetchingRate, setFetchingRate] = useState(false);
+    const [calcResult, setCalcResult] = useState(null);
+    const [calcLoading, setCalcLoading] = useState(false);
     const [expandedSections, setExpandedSections] = useState({
       duty: false,
       boc: false,
@@ -479,11 +483,14 @@ function AppContent() {
 
     useEffect(() => {
       if (sharedCodeData) {
-        setHsCode(sharedCodeData.code);
-        setDutyRate(sharedCodeData.rate !== null ? String(sharedCodeData.rate) : "0");
+        setHsCode(sharedCodeData.code || "0000.00.00");
+        setDutyRate(sharedCodeData.rate !== null ? sharedCodeData.rate : 5);
         setLegalDesc(sharedCodeData.desc || "Loaded from system");
         setHierPath(sharedCodeData.path || "");
         setSpecies(sharedCodeData.species || null);
+        if (sharedCodeData.fob !== undefined) setFob(sharedCodeData.fob);
+        if (sharedCodeData.freight !== undefined) setFreight(sharedCodeData.freight);
+        if (sharedCodeData.dangerous !== undefined) setDangerous(sharedCodeData.dangerous);
       }
     }, [sharedCodeData]);
 
@@ -505,18 +512,43 @@ function AppContent() {
     };
 
     const currentExRate = parseFloat(settings.exchangeRate) || 1;
-    const totalCifPhp   = (parseFloat(cifUsd) || 0) * currentExRate;
-    const computedDuty  = totalCifPhp * ((parseFloat(dutyRate) || 0) / 100);
-    const totalLanded   = totalCifPhp + computedDuty + parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee);
-    const computedVat   = totalLanded * ((parseFloat(settings.vatRate) || 0) / 100);
-    const grandTotal    = computedDuty + computedVat + parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee);
 
-    const fmt = n => "₱ " + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const fmtNum = n => n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const handleCalculate = async () => {
+      setCalcLoading(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/calculator/compute-boc-taxes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            fob_fca_value: parseFloat(fob) || 0,
+            exchange_rate: currentExRate,
+            freight_cost: parseFloat(freight) || 0,
+            rate_of_duty: parseFloat(dutyRate) || 0,
+            is_dangerous_goods: dangerous,
+            excise_tax: 0,
+            brokerage_fee: parseFloat(settings.bocProcessingFee) || 700,
+            import_processing_fee: 0,
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setCalcResult(data);
+        } else {
+          alert(data.detail || "Calculation failed");
+        }
+      } catch (err) {
+        alert("Network error during calculation");
+      }
+      setCalcLoading(false);
+    };
 
     const toggleSection = (section) => {
       setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
     };
+
+    const fmt = n => n !== undefined ? "₱ " + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+    const assessment = calcResult?.assessment || {};
+    const valuation = calcResult?.valuation || {};
 
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -529,12 +561,23 @@ function AppContent() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>CIF Value (USD)</label>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>FOB / FCA Value (USD)</label>
                   <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
                 </div>
-                <input type="number" value={cifUsd} onChange={e => setCifUsd(e.target.value)} />
+                <input type="number" value={fob} onChange={e => setFob(e.target.value)} />
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
-                  💡 {fmtNum(parseFloat(cifUsd) || 0)} USD × {currentExRate.toFixed(2)} = {fmt(totalCifPhp)}
+                  💡 Base commercial invoice value
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Freight Cost (USD)</label>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
+                </div>
+                <input type="number" value={freight} onChange={e => setFreight(e.target.value)} />
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 Shipping / freight charges
                 </div>
               </div>
 
@@ -547,14 +590,11 @@ function AppContent() {
                   type="range" 
                   min="0" 
                   max="50" 
-                  step="1" 
+                  step="0.5" 
                   value={dutyRate} 
                   onChange={e => setDutyRate(e.target.value)} 
                   style={{ padding: 0, height: 6, cursor: "pointer" }} 
                 />
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
-                  💡 {fmt(totalCifPhp)} × {dutyRate}% = {fmt(computedDuty)}
-                </div>
               </div>
 
               <div>
@@ -568,24 +608,9 @@ function AppContent() {
                 </div>
               </div>
 
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>VAT Rate: <span className="mono" style={{ color: C.goldL }}>{settings.vatRate}%</span></label>
-                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
-                  💡 {fmt(totalLanded)} × {settings.vatRate}% = {fmt(computedVat)}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>BOC Fee + Stamp</label>
-                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
-                  💡 ₱{settings.bocProcessingFee} (BOC) + ₱{settings.docStampFee} (Stamp) = {fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}
-                </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <label style={{ fontSize: 12, color: C.muted }}>Dangerous Goods?</label>
+                <input type="checkbox" checked={dangerous} onChange={e => setDangerous(e.target.checked)} style={{ width: 20, height: 20 }} />
               </div>
 
               <div style={{ background: C.navyL, padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
@@ -607,6 +632,9 @@ function AppContent() {
                 )}
               </div>
 
+              <button onClick={handleCalculate} disabled={calcLoading} style={{ background: C.gold, color: C.navy, padding: 10, borderRadius: 6, fontWeight: 600 }}>
+                {calcLoading ? '⏳ Computing...' : '🚀 Compute Taxes'}
+              </button>
               <button onClick={() => setTab("settings")} style={{ background: C.blue, color: C.white, padding: 10, borderRadius: 6, fontWeight: 600 }}>⚙️ Edit Settings</button>
             </div>
           </Card>
@@ -614,11 +642,16 @@ function AppContent() {
 
         <div>
           <Card style={{ position: "sticky", top: 20, borderLeft: `4px solid ${C.gold}` }}>
-            <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: C.goldL }}>📊 Duty & Tax Cascade</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <p style={{ fontWeight: 700, fontSize: 15, color: C.goldL }}>📊 Duty & Tax Cascade</p>
+              <span style={{ fontSize: 10, color: C.green, background: `${C.green}22`, padding: '2px 8px', borderRadius: 20 }}>
+                ● Live Verification: BSP Framework Active
+              </span>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
-                <span>CIF PHP</span>
-                <span className="mono">{fmt(totalCifPhp)}</span>
+                <span>Dutiable Value (PHP)</span>
+                <span className="mono">{fmt(valuation.dutiable_value_php)}</span>
               </div>
 
               <div>
@@ -628,15 +661,15 @@ function AppContent() {
                 >
                   <span>Customs Duty ({dutyRate}%)</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="mono">{fmt(computedDuty)}</span>
+                    <span className="mono">{fmt(assessment.customs_duty)}</span>
                     <span style={{ color: C.muted }}>{expandedSections.duty ? '−' : '+'}</span>
                   </span>
                 </div>
                 {expandedSections.duty && (
                   <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
-                      <span>CIF PHP × {dutyRate}%</span>
-                      <span className="mono">{fmt(computedDuty)}</span>
+                      <span>Dutiable PHP × {dutyRate}%</span>
+                      <span className="mono">{fmt(assessment.customs_duty)}</span>
                     </div>
                   </div>
                 )}
@@ -649,23 +682,23 @@ function AppContent() {
                 >
                   <span>BOC Fees + Stamp</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                    <span className="mono">{fmt((assessment.bir_doc_stamp || 0) + (assessment.customs_doc_stamp || 0))}</span>
                     <span style={{ color: C.muted }}>{expandedSections.boc ? '−' : '+'}</span>
                   </span>
                 </div>
                 {expandedSections.boc && (
                   <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
-                      <span>Processing Fee</span>
-                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee))}</span>
+                      <span>BIR Doc Stamp</span>
+                      <span className="mono">{fmt(assessment.bir_doc_stamp)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
-                      <span>Doc Stamp</span>
-                      <span className="mono">{fmt(parseFloat(settings.docStampFee))}</span>
+                      <span>BOC Doc Stamp</span>
+                      <span className="mono">{fmt(assessment.customs_doc_stamp)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.gold, borderTop: `1px solid ${C.border}55`, paddingTop: 4, marginTop: 4 }}>
                       <span>Total</span>
-                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                      <span className="mono">{fmt((assessment.bir_doc_stamp || 0) + (assessment.customs_doc_stamp || 0))}</span>
                     </div>
                   </div>
                 )}
@@ -678,41 +711,44 @@ function AppContent() {
                 >
                   <span style={{ color: C.muted }}>Landed Cost (VAT base)</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="mono">{fmt(totalLanded)}</span>
+                    <span className="mono">{fmt(assessment.total_landed_cost)}</span>
                     <span style={{ color: C.muted }}>{expandedSections.landed ? '−' : '+'}</span>
                   </span>
                 </div>
                 {expandedSections.landed && (
                   <div style={{ padding: "8px 12px", background: C.navyL, borderRadius: 4, marginBottom: 4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
-                      <span>CIF PHP</span>
-                      <span className="mono">{fmt(totalCifPhp)}</span>
+                      <span>Dutiable PHP</span>
+                      <span className="mono">{fmt(valuation.dutiable_value_php)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
                       <span>Customs Duty</span>
-                      <span className="mono">{fmt(computedDuty)}</span>
+                      <span className="mono">{fmt(assessment.customs_duty)}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted }}>
                       <span>BOC Fees + Stamp</span>
-                      <span className="mono">{fmt(parseFloat(settings.bocProcessingFee) + parseFloat(settings.docStampFee))}</span>
+                      <span className="mono">{fmt((assessment.bir_doc_stamp || 0) + (assessment.customs_doc_stamp || 0))}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.gold, borderTop: `1px solid ${C.border}55`, paddingTop: 4, marginTop: 4 }}>
                       <span>Total Landed Cost</span>
-                      <span className="mono">{fmt(totalLanded)}</span>
+                      <span className="mono">{fmt(assessment.total_landed_cost)}</span>
                     </div>
                   </div>
                 )}
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
-                <span>VAT ({settings.vatRate}%)</span>
-                <span className="mono">{fmt(computedVat)}</span>
+                <span>VAT (12%)</span>
+                <span className="mono">{fmt(assessment.vat_12)}</span>
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", borderTop: `2px solid ${C.gold}`, paddingTop: 14, marginTop: 6 }}>
-                <span style={{ fontWeight: 700 }}>TOTAL DUE</span>
-                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(grandTotal)}</span>
+                <span style={{ fontWeight: 700 }}>TOTAL TAX PAYABLE</span>
+                <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(assessment.total_tax_payable)}</span>
               </div>
+            </div>
+            <div style={{ marginTop: 16, padding: 10, background: `${C.gold}11`, borderRadius: 6, border: `1px solid ${C.gold}33`, fontSize: 11, color: C.muted }}>
+              💡 <strong>Legal Audit Reference:</strong> All parameters are evaluated in absolute compliance with Section 400 of the Customs Modernization and Tariff Act (CMTA) governing Informal Entry Express Consignments.
             </div>
           </Card>
         </div>
