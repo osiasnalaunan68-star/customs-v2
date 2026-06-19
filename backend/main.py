@@ -360,3 +360,12 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
 @app.get("/")
 def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
+
+# ─── Debug Endpoint ──────────────────────────────────────────────────────
+@app.get("/debug")
+def debug_info(current_user: User = Depends(get_current_user)):
+    return {
+        "records": len(TARIFF_DATABASE),
+        "sample": TARIFF_DATABASE[:3] if TARIFF_DATABASE else [],
+        "anthropic_key_set": bool(ANTHROPIC_API_KEY)
+    }
