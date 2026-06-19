@@ -23,21 +23,65 @@ const C = {
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0A0F1E;  color: ${C.white}; font-family: 'Inter', sans-serif; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: ${C.navyL}; }
-  ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
-  input, select, textarea {
-    background: ${C.navyL}; border: 1px solid ${C.border};
-    color: ${C.white}; border-radius: 6px; padding: 10px 14px;
-    font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
-    transition: all 0.2s; width: 100%;
+  body {
+    background: #0A0F1E;
+    color: #E8F0FE;
+    font-family: 'Inter', sans-serif;
+    position: relative;
   }
-  input:focus, select:focus, textarea:focus { border-color: ${C.gold}; box-shadow: 0 0 8px rgba(200,151,43,0.2); }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,151,43,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,151,43,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #112240; }
+  ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 3px; }
+  input, select, textarea {
+    background: #112240;
+    border: 1px solid #1E3A5F;
+    color: #E8F0FE;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #C8972B;
+    box-shadow: 0 0 8px rgba(200,151,43,0.2);
+  }
   button { cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s; }
   button:hover { filter: brightness(1.1); }
   .mono { font-family: 'JetBrains Mono', monospace; }
-
+  .card {
+    background: #111827;
+    border: 1px solid rgba(200,151,43,0.15);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: rgba(200,151,43,0.4);
+    box-shadow: 0 0 30px rgba(200,151,43,0.06);
+  }
+  .badge-gold {
+    background: #C8972B;
+    color: #0A0F1E;
+  }
+  .pill {
+    background: rgba(200,151,43,0.15);
+    color: #C8972B;
+    border: 1px solid rgba(200,151,43,0.3);
+  }
   @media (max-width: 768px) {
     .grid-2 { grid-template-columns: 1fr !important; }
     .header { flex-direction: column; text-align: center; }
@@ -95,6 +139,16 @@ function AppContent() {
   const { token, logout } = useAuth();
   const [tab, setTab] = useState("calc");
   const [sharedCodeData, setSharedCodeData] = useState(null);
+  const navigate = useNavigate();
+
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem("boc_app_settings");
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("boc_app_settings", JSON.stringify(settings));
+  }, [settings]);
 
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem("boc_calc_history");
@@ -113,11 +167,11 @@ function AppContent() {
   };
 
   const loadHistoryEntry = (entry) => {
-    setSharedCodeData({ 
-      code: entry.ahtn_code || "0000.00.00", 
-      rate: entry.rate_of_duty || 0, 
-      desc: entry.description || "From history", 
-      path: "", 
+    setSharedCodeData({
+      code: entry.ahtn_code || "0000.00.00",
+      rate: entry.rate_of_duty || 0,
+      desc: entry.description || "From history",
+      path: "",
       species: null,
       fob: entry.fob_fca_value || 0,
       freight: entry.freight_cost || 0,
@@ -126,23 +180,12 @@ function AppContent() {
     setTab("calc");
   };
 
-  const navigate = useNavigate();
-
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem("boc_app_settings");
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("boc_app_settings", JSON.stringify(settings));
-  }, [settings]);
-
-  const handleCodeTransfer = (code, rate, desc, path, species) => {
-    setSharedCodeData({ code, rate, desc, path, species });
+  const handleCodeTransfer = (code, rate, desc, path, species, fob = 0, freight = 0, insurance = 0) => {
+    setSharedCodeData({ code, rate, desc, path, species, fob, freight, insurance });
     setTab("calc");
   };
 
-  // ─── HSLookup with Chapter Browser ──────────────────────────────────
+  // ─── HSLookup ──────────────────────────────────────────────────────────
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [speciesFilter, setSpeciesFilter] = useState("");
@@ -252,17 +295,7 @@ function AppContent() {
     };
 
     const handleAIClassify = (code, description) => {
-      const aiDesc = `${code} – ${description}
-  @media (max-width: 768px) {
-    .grid-2 { grid-template-columns: 1fr !important; }
-    .header { flex-direction: column; text-align: center; }
-    .card { padding: 12px; }
-    /* Calculator specific: stack columns */
-    .calc-grid { grid-template-columns: 1fr !important; }
-    .calc-inputs { order: 1; }
-    .calc-results { order: 2; }
-  }
-`;
+      const aiDesc = `${code} – ${description}`;
       setTab("ai");
       window.__aiPrefill = aiDesc;
     };
@@ -369,9 +402,9 @@ function AppContent() {
                             const paddingLeft = 10 + level * 16;
 
                             return (
-                              <tr 
-                                key={idx} 
-                                style={{ 
+                              <tr
+                                key={idx}
+                                style={{
                                   borderBottom: `1px solid ${C.border}20`,
                                   transition: 'background 0.2s ease'
                                 }}
@@ -385,11 +418,11 @@ function AppContent() {
                                   {displayCode}
                                   <button
                                     onClick={() => copyToClipboard(displayCode)}
-                                    style={{ 
-                                      background: 'transparent', 
-                                      color: C.muted, 
-                                      border: 'none', 
-                                      cursor: 'pointer', 
+                                    style={{
+                                      background: 'transparent',
+                                      color: C.muted,
+                                      border: 'none',
+                                      cursor: 'pointer',
                                       marginLeft: 6,
                                       fontSize: 12
                                     }}
@@ -425,12 +458,12 @@ function AppContent() {
                                   <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" }}>
                                     <button
                                       onClick={() => handleInject(displayCode, finalRate, displayDesc, item.hierarchical_path, item.species)}
-                                      style={{ 
-                                        padding: "4px 10px", 
-                                        background: isInjected ? C.green : C.blue, 
-                                        color: isInjected ? C.navy : C.white, 
-                                        borderRadius: 4, 
-                                        fontSize: 11, 
+                                      style={{
+                                        padding: "4px 10px",
+                                        background: isInjected ? C.green : C.blue,
+                                        color: isInjected ? C.navy : C.white,
+                                        borderRadius: 4,
+                                        fontSize: 11,
                                         fontWeight: 600,
                                         minWidth: 60,
                                         transition: 'all 0.3s ease'
@@ -440,12 +473,12 @@ function AppContent() {
                                     </button>
                                     <button
                                       onClick={() => handleAIClassify(displayCode, displayDesc)}
-                                      style={{ 
-                                        padding: "4px 10px", 
-                                        background: C.gold, 
-                                        color: C.navy, 
-                                        borderRadius: 4, 
-                                        fontSize: 11, 
+                                      style={{
+                                        padding: "4px 10px",
+                                        background: C.gold,
+                                        color: C.navy,
+                                        borderRadius: 4,
+                                        fontSize: 11,
                                         fontWeight: 600,
                                       }}
                                       title="AI Classify"
@@ -474,11 +507,11 @@ function AppContent() {
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    style={{ 
-                      padding: "6px 12px", 
-                      background: currentPage === 1 ? 'transparent' : C.blue, 
-                      color: currentPage === 1 ? C.muted : C.white, 
-                      borderRadius: 5, 
+                    style={{
+                      padding: "6px 12px",
+                      background: currentPage === 1 ? 'transparent' : C.blue,
+                      color: currentPage === 1 ? C.muted : C.white,
+                      borderRadius: 5,
                       fontSize: 12,
                       fontWeight: 600,
                       border: `1px solid ${currentPage === 1 ? C.border : C.blue}`,
@@ -491,11 +524,11 @@ function AppContent() {
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    style={{ 
-                      padding: "6px 12px", 
-                      background: currentPage === totalPages ? 'transparent' : C.blue, 
-                      color: currentPage === totalPages ? C.muted : C.white, 
-                      borderRadius: 5, 
+                    style={{
+                      padding: "6px 12px",
+                      background: currentPage === totalPages ? 'transparent' : C.blue,
+                      color: currentPage === totalPages ? C.muted : C.white,
+                      borderRadius: 5,
                       fontSize: 12,
                       fontWeight: 600,
                       border: `1px solid ${currentPage === totalPages ? C.border : C.blue}`,
@@ -518,7 +551,6 @@ function AppContent() {
     const [fob, setFob] = useState(sharedCodeData?.fob || 10000);
     const [freight, setFreight] = useState(sharedCodeData?.freight || 500);
     const [insurance, setInsurance] = useState(sharedCodeData?.insurance || 0);
-    const [dangerous, setDangerous] = useState(sharedCodeData?.dangerous || false);
     const [dutyRate, setDutyRate] = useState(sharedCodeData?.rate || 5);
     const [hsCode, setHsCode] = useState(sharedCodeData?.code || "0000.00.00");
     const [legalDesc, setLegalDesc] = useState(sharedCodeData?.desc || "General baseline description");
@@ -526,13 +558,13 @@ function AppContent() {
     const [species, setSpecies] = useState(sharedCodeData?.species || null);
     const [fetchingRate, setFetchingRate] = useState(false);
     const [calcResult, setCalcResult] = useState(null);
-    const [entryType, setEntryType] = useState("");
     const [calcLoading, setCalcLoading] = useState(false);
     const [expandedSections, setExpandedSections] = useState({
       duty: false,
       boc: false,
       landed: false
     });
+    const [entryType, setEntryType] = useState("");
 
     useEffect(() => {
       if (sharedCodeData) {
@@ -544,7 +576,6 @@ function AppContent() {
         if (sharedCodeData.fob !== undefined) setFob(sharedCodeData.fob);
         if (sharedCodeData.freight !== undefined) setFreight(sharedCodeData.freight);
         if (sharedCodeData.insurance !== undefined) setInsurance(sharedCodeData.insurance);
-        if (sharedCodeData.dangerous !== undefined) setDangerous(sharedCodeData.dangerous);
       }
     }, [sharedCodeData]);
 
@@ -574,34 +605,35 @@ function AppContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
-            ahtn_code: hsCode,
             fob_fca_value: parseFloat(fob) || 0,
             exchange_rate: currentExRate,
             freight_cost: parseFloat(freight) || 0,
+            insurance_cost: parseFloat(insurance) || 0,
             rate_of_duty: parseFloat(dutyRate) || 0,
-            is_dangerous_goods: dangerous,
+            is_dangerous_goods: false,
             excise_tax: 0,
             brokerage_fee: parseFloat(settings.bocProcessingFee) || 700,
             import_processing_fee: 0,
+            ahtn_code: hsCode
           })
         });
         const data = await res.json();
         if (res.ok) {
           setCalcResult(data);
-            if (data.assessment && data.assessment.total_tax_payable) {
-              saveToHistory({
-                timestamp: Date.now(),
-                ahtn_code: hsCode,
-                fob_fca_value: parseFloat(fob),
-                freight_cost: parseFloat(freight),
-                insurance_cost: parseFloat(insurance) || 0,
-                rate_of_duty: parseFloat(dutyRate),
-                total_tax_payable: data.assessment.total_tax_payable,
-                total_landed_cost: data.assessment.total_landed_cost,
-                description: legalDesc
-              });
-            }
-            setEntryType(data.entry_type || "");
+          setEntryType(data.entry_type || "");
+          if (data.assessment && data.assessment.total_tax_payable) {
+            saveToHistory({
+              timestamp: Date.now(),
+              ahtn_code: hsCode,
+              fob_fca_value: parseFloat(fob),
+              freight_cost: parseFloat(freight),
+              insurance_cost: parseFloat(insurance) || 0,
+              rate_of_duty: parseFloat(dutyRate),
+              total_tax_payable: data.assessment.total_tax_payable,
+              total_landed_cost: data.assessment.total_landed_cost,
+              description: legalDesc
+            });
+          }
         } else {
           alert(data.detail || "Calculation failed");
         }
@@ -620,8 +652,8 @@ function AppContent() {
     const valuation = calcResult?.valuation || {};
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="calc-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div className="calc-inputs" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <p style={{ fontWeight: 700, color: C.goldL }}>🎛️ Live Simulation</p>
@@ -652,17 +684,28 @@ function AppContent() {
 
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Insurance Cost (USD)</label>
+                  <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
+                </div>
+                <input type="number" value={insurance} onChange={e => setInsurance(e.target.value)} />
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
+                  💡 Insurance premium (if any)
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Duty Rate: <span className="mono" style={{ color: C.goldL }}>{dutyRate}%</span></label>
                   <button onClick={() => setTab("settings")} style={{ background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 4, padding: '2px 8px', fontSize: 12 }} title="Edit in Settings">⚙️</button>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="50" 
-                  step="0.5" 
-                  value={dutyRate} 
-                  onChange={e => setDutyRate(e.target.value)} 
-                  style={{ padding: 0, height: 6, cursor: "pointer" }} 
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="0.5"
+                  value={dutyRate}
+                  onChange={e => setDutyRate(e.target.value)}
+                  style={{ padding: 0, height: 6, cursor: "pointer" }}
                 />
               </div>
 
@@ -675,11 +718,6 @@ function AppContent() {
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontFamily: 'monospace', background: C.navyL, padding: '4px 8px', borderRadius: 4 }}>
                   💡 1 USD = {currentExRate.toFixed(2)} PHP (live rate)
                 </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <label style={{ fontSize: 12, color: C.muted }}>Dangerous Goods?</label>
-                <input type="checkbox" checked={dangerous} onChange={e => setDangerous(e.target.checked)} style={{ width: 20, height: 20 }} />
               </div>
 
               <div style={{ background: C.navyL, padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
@@ -709,7 +747,7 @@ function AppContent() {
           </Card>
         </div>
 
-        <div>
+        <div className="calc-results">
           <Card style={{ position: "sticky", top: 20, borderLeft: `4px solid ${C.gold}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <p style={{ fontWeight: 700, fontSize: 15, color: C.goldL }}>📊 Duty & Tax Cascade</p>
@@ -717,6 +755,24 @@ function AppContent() {
                 ● Live Verification: BSP Framework Active
               </span>
             </div>
+
+            {entryType && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: C.muted }}>Entry Type</span>
+                <span style={{
+                  background: entryType === "informal" ? C.green : C.gold,
+                  color: entryType === "informal" ? C.navy : C.navy,
+                  padding: "2px 12px",
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase"
+                }}>
+                  {entryType === "informal" ? "🟢 Informal (De Minimis)" : "🟡 Formal Entry"}
+                </span>
+              </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
                 <span>Dutiable Value (PHP)</span>
@@ -724,7 +780,7 @@ function AppContent() {
               </div>
 
               <div>
-                <div 
+                <div
                   style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" }}
                   onClick={() => toggleSection('duty')}
                 >
@@ -745,7 +801,7 @@ function AppContent() {
               </div>
 
               <div>
-                <div 
+                <div
                   style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer", borderBottom: `1px solid ${C.border}55` }}
                   onClick={() => toggleSection('boc')}
                 >
@@ -774,7 +830,7 @@ function AppContent() {
               </div>
 
               <div>
-                <div 
+                <div
                   style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: `${C.blue}15`, borderRadius: 5, cursor: "pointer" }}
                   onClick={() => toggleSection('landed')}
                 >
@@ -816,45 +872,6 @@ function AppContent() {
                 <span className="mono" style={{ color: C.goldL, fontWeight: 800, fontSize: 20 }}>{fmt(assessment.total_tax_payable)}</span>
               </div>
             </div>
-            {/* ⚖️ Module 1: Legal Justification Engine */}
-            {calcResult?.legal && (
-              <div style={{ marginTop: 12, padding: 10, background: `${C.gold}11`, borderRadius: 6, border: `1px solid ${C.gold}33`, fontSize: 11, color: C.muted }}>
-                <strong>⚖️ Legal Justification Base:</strong><br />
-                {calcResult.legal.justification}
-              </div>
-            )}
-
-            {/* 📈 Module 2: Capital Allocation Simulator */}
-            {calcResult?.volatility && (
-              <div style={{ marginTop: 12, padding: 10, background: `${C.blue}11`, borderRadius: 6, border: `1px solid ${C.blue}33`, fontSize: 12 }}>
-                <strong>📈 Capital Allocation Stress-Test</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 6 }}>
-                  <div><span style={{ color: C.green, fontSize: 11 }}>Baseline</span><br/><span className="mono">{fmt(calcResult.volatility.best_case)}</span></div>
-                  <div><span style={{ color: C.gold, fontSize: 11 }}>+2% Volatility</span><br/><span className="mono">{fmt(calcResult.volatility.plus_2_percent)}</span></div>
-                  <div><span style={{ color: C.red, fontSize: 11 }}>+5% Risk Cap</span><br/><span className="mono">{fmt(calcResult.volatility.plus_5_percent)}</span></div>
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                  Recommended capital buffer allocation: {fmt(calcResult.volatility.buffer_2)} up to {fmt(calcResult.volatility.buffer_5)}
-                </div>
-              </div>
-            )}
-
-            {/* 🛡️ Module 3: Post-Clearance Audit Profiler */}
-            {calcResult?.risk && (
-              <div style={{ marginTop: 12, padding: 10, background: C.navyL, borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12 }}>
-                <strong>🛡️ Post-Clearance Audit Risk Index</strong>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 20 }}>{calcResult.risk.color}</span>
-                  <span style={{ fontWeight: 700, textTransform: "uppercase", color: calcResult.risk.level === "high" ? C.red : calcResult.risk.level === "medium" ? C.gold : C.green }}>
-                    {calcResult.risk.level} risk factor
-                  </span>
-                </div>
-                <ul style={{ fontSize: 11, color: C.muted, paddingLeft: 16, marginTop: 4, marginBottom: 0 }}>
-                  {calcResult.risk.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
-              </div>
-            )}
-
             <div style={{ marginTop: 16, padding: 10, background: `${C.gold}11`, borderRadius: 6, border: `1px solid ${C.gold}33`, fontSize: 11, color: C.muted }}>
               💡 <strong>Legal Audit Reference:</strong> All parameters are evaluated in absolute compliance with Section 400 of the Customs Modernization and Tariff Act (CMTA) governing Informal Entry Express Consignments.
             </div>
@@ -864,7 +881,7 @@ function AppContent() {
     );
   }
 
-  // ─── AI Classifier ────────────────────────────────────────────────────
+  // ─── AI Classifier (with top-3 results) ─────────────────────────────
   function AIClassifier() {
     const [text, setText] = useState("");
     const [predicting, setPredicting] = useState(false);
@@ -981,7 +998,7 @@ function AppContent() {
                   <span style={{ fontSize: 11, color: C.muted }}>{match.chapter}</span>
                 </div>
                 <button
-                  onClick={() => handleCodeTransfer(match.code, match.duty_rate, match.description, match.hierarchical_path || match.chapter, match.species)}
+                  onClick={() => handleCodeTransfer(match.code, match.duty_rate, match.description, match.chapter, null)}
                   style={{ marginTop: 10, padding: "6px 14px", background: C.blue, color: C.white, borderRadius: 5, fontWeight: 600, fontSize: 12 }}
                 >
                   💉 Inject
@@ -1126,8 +1143,7 @@ function AppContent() {
     );
   }
 
-  
-  // ─── History Component ──────────────────────────────────────────────
+  // ─── History Tab ──────────────────────────────────────────────────────
   function HistoryTab() {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1165,16 +1181,21 @@ function AppContent() {
     );
   }
 
-
   const TABS = [
     { id: "lookup",    label: "🔍 HS Lookup" },
     { id: "calc",      label: "🧮 Calculator" },
     { id: "ai",        label: "🤖 AI Classifier" },
     { id: "settings",  label: "⚙️ Settings" },
-    { id: "history",  label: "📜 History" },
+    { id: "history",   label: "📜 History" },
   ];
 
-  const VIEWS = { lookup: <HSLookup />, calc: <InteractiveCalc />, ai: <AIClassifier />, settings: <CustomsSettings /> };
+  const VIEWS = {
+    lookup: <HSLookup />,
+    calc: <InteractiveCalc />,
+    ai: <AIClassifier />,
+    settings: <CustomsSettings />,
+    history: <HistoryTab />,
+  };
 
   return (
     <>

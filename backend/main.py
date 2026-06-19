@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 import os
 import re
 from sqlalchemy.orm import Session
@@ -62,6 +62,12 @@ def build_hierarchical_path(item):
     path = f"{ch_title} > {hd_desc} > {item['description']}"
     return re.sub(r'\s+', ' ', path).strip()
 
+def get_entry_type(fob_usd: float) -> str:
+    if fob_usd <= 200:
+        return "informal"
+    else:
+        return "formal"
+
 # ─── Pydantic Models ──────────────────────────────────────────────────────
 class UserCreate(BaseModel):
     email: EmailStr
@@ -69,6 +75,18 @@ class UserCreate(BaseModel):
 
 class ClassificationRequest(BaseModel):
     description: str
+
+class CustomsCalculationRequest(BaseModel):
+    fob_fca_value: float
+    exchange_rate: float
+    freight_cost: float
+    insurance_cost: float = 0.0
+    rate_of_duty: float
+    is_dangerous_goods: bool = False
+    excise_tax: float = 0.0
+    brokerage_fee: float = 700.0
+    import_processing_fee: float = 0.0
+    ahtn_code: str = "0000.00.00"
 
 # ─── Authentication Endpoints ─────────────────────────────────────────────
 @app.post("/register", status_code=201)
@@ -155,8 +173,6 @@ def get_chapter_details(ch_num: int, current_user: User = Depends(get_current_us
         copy["species"] = get_species_info(item["code"])
         enhanced.append(copy)
     return {"items": enhanced}
-
-@app.post("/classify")
 
 @app.post("/classify")
 def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
@@ -276,113 +292,71 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
         })
 
     return {"predictions": predictions[:3]}
-)
-        predictions.append({
-            "code": "1006.20.90",
-            "confidence": "85%",
-            "description": "Husked (brown) rice (AI Analysis: Alternative: husked rice.)",
-            "reasoning": "Alternative: husked rice.",
-            "duty_rate": 35.0,
-            "rate": 35.0,
-            "rate_2026": 35.0,
-            "chapter": "Chapter 10: Cereals"
-        })
 
-    # ─── 2. CHAPTER 8 FRUITS AND NUTS ────────────────────────────────
-    elif any(word in desc for word in ["apple", "mango", "banana", "fruit", "prutas", "nut"]):
-        predictions.append({
-            "code": "0808.10.00",
-            "confidence": "92%",
-            "description": "Fresh fruit (AI Analysis: Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.)",
-            "reasoning": "Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.",
-            "duty_rate": 7.0,
-            "rate": 7.0,
-            "rate_2026": 7.0,
-            "chapter": "Chapter 08: Edible Fruit and Nuts"
-        })
+@app.post("/calculator/compute-boc-taxes")
+def compute_boc_taxes(req: CustomsCalculationRequest):
+    try:
+        # STEP 1: Rule-Based Insurance Premium Allocation (2% General / 4% Dangerous)
+        insurance_multiplier = 0.04 if req.is_dangerous_goods else 0.02
+        insurance_foreign = req.fob_fca_value * insurance_multiplier
 
-    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ──────────────────────────
-    elif any(word in desc for word in ["live", "buhay"]) and any(word in desc for word in ["animal", "hayop", "cattle", "baka", "horse", "kabayo", "pig", "baboy"]):
-        predictions.append({
-            "code": "0102.21.00",
-            "confidence": "85%",
-            "description": "Live bovine animals (pure-bred breeding animals) (AI Analysis: Product identified as live animal, classified under Chapter 1.)",
-            "reasoning": "Product identified as live animal, classified under Chapter 1.",
-            "duty_rate": 0.0,
-            "rate": 0.0,
-            "rate_2026": 0.0,
-            "chapter": "Chapter 01: Live animals"
-        })
+        # STEP 2: Aggregate Total Dutiable Value (FOB + Freight + Insurance)
+        total_dutiable_foreign = req.fob_fca_value + req.freight_cost + insurance_foreign + req.insurance_cost
 
-    # ─── 4. FALLBACK – Comprehensive Database Scan ───────────────────
-    if not predictions:
-        search_word = desc.strip()
-        for item in TARIFF_DATABASE:
-            item_desc_lower = item["description"].lower()
-            
-            # Match if the query is a substring of the description
-            if search_word in item_desc_lower:
-                r = item.get("rate_2026") or item.get("rate_2024") or 0
-                predictions.append({
-                    "code": item["code"],
-                    "confidence": "80%",
-                    "description": f"{item['description']} (AI Search Match)",
-                    "reasoning": "Located via global database tariff mapping.",
-                    "duty_rate": r,
-                    "rate": r,
-                    "rate_2026": r,
-                    "chapter": f"Chapter {item['code'][:2]}"
-                })
-                
-                # Allow up to 5 alternative matches to show in the UI
-                if len(predictions) >= 5:
-                    break
-# ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
-    if not predictions:
-        predictions.append({
-            "code": "0000.00.00",
-            "confidence": "Low",
-            "description": "Unclassified (AI Analysis: No specific match. Please refine description.)",
-            "reasoning": "No specific match. Please refine description.",
-            "duty_rate": 0.0,
-            "rate": 0.0,
-            "rate_2026": 0.0,
-            "chapter": "Unknown"
-        })
+        # STEP 3: Currency Normalization to Philippine Peso (PHP)
+        total_dutiable_php = total_dutiable_foreign * req.exchange_rate
 
-    return {"predictions": predictions}
+        # STEP 4: Customs Duty Computation
+        customs_duty_php = total_dutiable_php * (req.rate_of_duty / 100.0)
+
+        # STEP 5: Fixed Government Statutory Fees (BIR & BOC Mandated Stamps)
+        bir_doc_stamp = 30.00
+        customs_doc_stamp = 100.00
+
+        # STEP 6: Sequential Landed Cost Derivation
+        total_landed_cost = (
+            total_dutiable_php +
+            customs_duty_php +
+            req.excise_tax +
+            req.brokerage_fee +
+            req.import_processing_fee +
+            customs_doc_stamp +
+            bir_doc_stamp
+        )
+
+        # STEP 7: Value Added Tax Evaluation (12% of Integrated Landed Cost)
+        vat_php = total_landed_cost * 0.12
+
+        # STEP 8: Grand Total Tax Payable to Bureau of Customs
+        total_tax_payable = (
+            customs_duty_php +
+            vat_php +
+            req.excise_tax +
+            req.import_processing_fee +
+            bir_doc_stamp +
+            customs_doc_stamp
+        )
+
+        return {
+            "status": "success",
+            "entry_type": get_entry_type(req.fob_fca_value),
+            "valuation": {
+                "insurance_foreign": round(insurance_foreign, 2),
+                "dutiable_value_foreign": round(total_dutiable_foreign, 2),
+                "dutiable_value_php": round(total_dutiable_php, 2)
+            },
+            "assessment": {
+                "customs_duty": round(customs_duty_php, 2),
+                "vat_12": round(vat_php, 2),
+                "bir_doc_stamp": bir_doc_stamp,
+                "customs_doc_stamp": customs_doc_stamp,
+                "total_landed_cost": round(total_landed_cost, 2),
+                "total_tax_payable": round(total_tax_payable, 2)
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Engine Calculation Failure: {str(e)}")
 
 @app.get("/")
 def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
-
-# ─── ADVANCED CALCULATOR COMPONENT SCHEMAS ───────────────────────────────
-class CustomsCalculationRequest(BaseModel):
-    fob_fca_value: float            # Invoice value in Foreign Currency
-    exchange_rate: float            # Dynamic live rate or manual admin override
-    freight_cost: float             # Shipping/Freight cost in Foreign Currency
-    insurance_cost: float = 0.0     # Insurance cost (default 0)
-    rate_of_duty: float             # Duty percentage rate (e.g., 7.0 for 7%)
-    is_dangerous_goods: bool = False
-    excise_tax: float = 0.0
-    brokerage_fee: float = 700.0
-    import_processing_fee: float = 0.0
-    ahtn_code: str = "0000.00.00"   # For legal justification and risk assessment
-# ─── Formal vs Informal Entry Detection ────────────────────────────
-# In the compute_boc_taxes endpoint, after getting the request:
-# if req.fob_fca_value <= 200 and req.exchange_rate * req.fob_fca_value <= 200 * req.exchange_rate:
-# Actually, de minimis is based on FOB value <= USD 200.
-# We'll add a flag and adjust fees accordingly.
-
-# We'll patch the endpoint to include entry_type in the response.
-# We'll add a function to determine entry type.
-
-def get_entry_type(fob_usd: float) -> str:
-    if fob_usd <= 200:
-        return "informal"  # De minimis
-    else:
-        return "formal"
-
-# In the compute endpoint, after validation:
-# entry_type = get_entry_type(req.fob_fca_value)
-# and include in response: "entry_type": entry_type
