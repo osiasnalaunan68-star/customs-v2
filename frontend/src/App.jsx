@@ -23,7 +23,7 @@ const C = {
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${C.navy}; color: ${C.white}; font-family: 'Inter', sans-serif; }
+  body { background: #0A0F1E;  color: ${C.white}; font-family: 'Inter', sans-serif; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: ${C.navyL}; }
   ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
@@ -1083,6 +1083,7 @@ function AppContent() {
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <span style={{ color: C.muted, fontSize: 11 }}>{TARIFF_VERSION} | Updated: {LAST_UPDATED}</span>
               <Pill color={C.goldL}>CMTA V2</Pill>
+              <a href="https://customs-docs.vercel.app" target="_blank" style={{ color: "#C8972B", textDecoration: "none", fontSize: 13, marginRight: 10 }}>📖 About</a>
               <button onClick={logout} style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, padding: "6px 14px", borderRadius: 5, fontSize: 12 }}>Logout</button>
             </div>
           </div>
