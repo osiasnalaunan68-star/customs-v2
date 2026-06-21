@@ -1333,22 +1333,25 @@ const handleAIClassify = (code, description) => {
   }
 
   const TABS = [
+    { id: "dashboard", label: "🏠 Dashboard" },
     { id: "lookup",    label: "🔍 HS Lookup" },
     { id: "calc",      label: "🧮 Calculator" },
+    { id: "estimator", label: "⚡ Estimator" },
     { id: "ai",        label: "🤖 AI Classifier" },
+    { id: "tracker",   label: "🚢 Tracker" },
     { id: "settings",  label: "⚙️ Settings" },
     { id: "history",   label: "📜 History" },
   ];
 
   const VIEWS = {
     dashboard: <DashboardTab token={token} history={history} setTab={setTab} settings={settings} />,
-    lookup: <HSLookup />,
-    calc: <InteractiveCalc key="calc" />,
+    lookup: <HSLookup token={token} settings={settings} handleCodeTransfer={handleCodeTransfer} setTab={setTab} />,
+    calc: <InteractiveCalc key="calc" token={token} sharedCodeData={sharedCodeData} settings={settings} setSettings={setSettings} saveToHistory={saveToHistory} setTab={setTab} />,
     estimator: <PreEstimator onTransferToCalc={handleTransferToCalc} />,
-    ai: <AIClassifier />,
+    ai: <AIClassifier token={token} handleCodeTransfer={handleCodeTransfer} />,
     tracker: <ShipmentTracker />,
-    settings: <CustomsSettings />,
-    history: <HistoryTab />,
+    settings: <CustomsSettings settings={settings} setSettings={setSettings} />,
+    history: <HistoryTab history={history} clearHistory={clearHistory} loadHistoryEntry={loadHistoryEntry} />,
   };
 
   return (
