@@ -1387,6 +1387,9 @@ const handleAIClassify = (code, description) => {
           {VIEWS[tab]}
         </div>
       </div>
+              <button className="theme-toggle" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} title="Toggle dark/light mode">
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
     </>
   );
 }
