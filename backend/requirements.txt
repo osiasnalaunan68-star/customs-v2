@@ -5,6 +5,6 @@ werkzeug
 pyjwt
 python-multipart
 pydantic[email]
-uvicorn
 psycopg2-binary
 anthropic
+httpx
