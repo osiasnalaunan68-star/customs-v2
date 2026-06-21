@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { API_BASE_URL, TARIFF_VERSION, LAST_UPDATED } from './config';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { API_BASE_URL } from './config';
 
 const C = {
   navy:   "#0A1628", navyL:  "#112240", blue:   "#1B4F9B", gold:   "#C8972B",
@@ -29,10 +29,6 @@ const globalStyle = `
   @media (max-width: 768px) { .calc-grid { grid-template-columns: 1fr !important; } }
 `;
 
-function Pill({ color, children }) {
-  return <span style={{ background: color + "22", color, border: `1px solid ${color}55`, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{children}</span>;
-}
-
 function Card({ children, style }) {
   return <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, ...style }}>{children}</div>;
 }
@@ -44,12 +40,9 @@ function AppContent() {
 
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem("boc_app_settings");
-    return saved ? JSON.parse(saved) : { vatRate: 12, bocProcessingFee: 700, docStampFee: 130, exchangeRate: 60.74, customOverrides: {} };
+    return saved ? JSON.parse(saved) : { vatRate: 12, bocProcessingFee: 700, docStampFee: 130, exchangeRate: 60.74 };
   });
 
-  const [history, setHistory] = useState([]);
-
-  // ─── HSLookup Component ───
   function HSLookup() {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
@@ -69,9 +62,7 @@ function AppContent() {
         {results.length > 0 && (
           <Card style={{ padding: 0, overflow: "hidden" }}>
             <table className="hs-table">
-              <thead>
-                <tr><th>Code</th><th>Description</th><th>Rate</th><th>Action</th></tr>
-              </thead>
+              <thead><tr><th>Code</th><th>Description</th><th>Rate</th><th>Action</th></tr></thead>
               <tbody>
                 {results.map((item, i) => (
                   <tr key={i}>
@@ -91,28 +82,20 @@ function AppContent() {
     );
   }
 
-  // ─── Interactive Calculator ───
   function InteractiveCalc() {
     const [fob, setFob] = useState(sharedCodeData?.fob || 10000);
     const [freight, setFreight] = useState(sharedCodeData?.freight || 500);
     const [insurance, setInsurance] = useState(sharedCodeData?.insurance || 0);
-    const [dutyRate, setDutyRate] = useState(sharedCodeData?.rate || 5);
+    const [dutyRate, setDutyRate] = useState(sharedCodeData?.rate || 14);
     const [hsCode, setHsCode] = useState(sharedCodeData?.code || "0000.00.00");
-    const [legalDesc, setLegalDesc] = useState(sharedCodeData?.desc || "General cargo baseline entry");
     const [calcResult, setCalcResult] = useState(null);
 
     useEffect(() => {
-      if (sharedCodeData) {
-        setHsCode(sharedCodeData.code || "0000.00.00");
-        setDutyRate(sharedCodeData.rate || 0);
-        setLegalDesc(sharedCodeData.desc || "");
-      }
+      if (sharedCodeData) { setHsCode(sharedCodeData.code); setDutyRate(sharedCodeData.rate); }
     }, [sharedCodeData]);
 
     const handleCalculate = async () => {
       const currentRate = parseFloat(settings?.exchangeRate) || 60.74;
-      const currentProcessingFee = parseFloat(settings?.bocProcessingFee) || 0.0;
-
       const res = await fetch(`${API_BASE_URL}/calculator/compute-boc-taxes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -125,16 +108,12 @@ function AppContent() {
           is_dangerous_goods: false,
           excise_tax: 0.0,
           brokerage_fee: 700.0,
-          import_processing_fee: currentProcessingFee,
+          import_processing_fee: 250.0,
           ahtn_code: hsCode
         })
       });
       const data = await res.json();
-      if (res.ok) {
-        setCalcResult(data);
-      } else {
-        console.error("Calculation Error:", data);
-      }
+      if (res.ok) setCalcResult(data);
     };
 
     const fmt = n => n !== undefined ? "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2 }) : "—";
@@ -147,10 +126,6 @@ function AppContent() {
           <div><label style={{ fontSize: 12, color: C.muted }}>Freight (USD)</label><input type="number" value={freight} onChange={e => setFreight(e.target.value)} /></div>
           <div><label style={{ fontSize: 12, color: C.muted }}>Insurance (USD)</label><input type="number" value={insurance} onChange={e => setInsurance(e.target.value)} /></div>
           <div><label style={{ fontSize: 12, color: C.muted }}>Duty Rate (%)</label><input type="number" value={dutyRate} onChange={e => setDutyRate(e.target.value)} /></div>
-          <div style={{ background: C.navyL, padding: 10, borderRadius: 6 }}>
-            <span style={{ fontSize: 11, color: C.gold }}>Active Item Code: {hsCode}</span>
-            <p style={{ fontSize: 12 }}>{legalDesc}</p>
-          </div>
           <button onClick={handleCalculate} style={{ background: C.gold, color: C.navy, padding: 12, borderRadius: 6, fontWeight: 700 }}>Compute Taxes</button>
         </Card>
 
@@ -158,32 +133,14 @@ function AppContent() {
           {calcResult && (
             <Card style={{ display: "flex", flexDirection: "column", gap: 12, borderLeft: `4px solid ${C.gold}` }}>
               <p style={{ fontWeight: 700, color: C.goldL }}>📊 Duty & Tax Cascade Output</p>
-
               <div style={{ background: C.navyL, padding: 10, borderRadius: 6, fontSize: 12 }}>
                 <span style={{ fontWeight: 600, color: C.gold }}>⚖️ Legal Rule Base:</span>
                 <p>{calcResult.legal_justification}</p>
               </div>
-
               <div style={{ display: "flex", justifyContent: "space-between" }}><span>Customs Duty:</span><span className="mono">{fmt(calcResult.assessment?.customs_duty)}</span></div>
               <div style={{ display: "flex", justifyContent: "space-between" }}><span>VAT (12%):</span><span className="mono">{fmt(calcResult.assessment?.vat_12)}</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
                 <strong>Total Tax Payable:</strong><span className="mono" style={{ color: C.goldL, fontWeight: 700 }}>{fmt(calcResult.assessment?.total_tax_payable)}</span>
-              </div>
-
-              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4 }}>
-                <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>💸 Volatility Buffer (Variance +1.5%)</p>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span>Suggested Safeguard Reserve:</span>
-                  <span className="mono" style={{ color: C.orange }}>+{fmt(calcResult.volatility_buffer?.suggested_buffer_php)}</span>
-                </div>
-              </div>
-
-              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, background: 'rgba(176,58,46,0.1)', padding: 10, borderRadius: 6 }}>
-                <p style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>🔍 Post-Clearance Audit Risk Level: {calcResult.risk_profile?.level}</p>
-                <p style={{ fontSize: 11, color: C.muted }}>Risk Score: {calcResult.risk_profile?.score}/100</p>
-                {calcResult.risk_profile?.triggers?.map((tg, i) => (
-                  <span key={i} style={{ display: "inline-block", background: C.navy, fontSize: 10, padding: "2px 6px", marginRight: 4, borderRadius: 4 }}>⚠️ {tg}</span>
-                ))}
               </div>
             </Card>
           )}
@@ -232,7 +189,7 @@ export default function App() {
 
 function PrivateRoute() {
   const { token, loading } = useAuth();
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading Workspace...</div>;
+  if (loading) return <div>Loading...</div>;
   if (!token) return <Navigate to="/login" replace />;
   return <AppContent />;
 }
