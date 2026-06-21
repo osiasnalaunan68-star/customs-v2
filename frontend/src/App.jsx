@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DashboardTab from './DashboardTab';
+import ShipmentTracker from './ShipmentTracker';
+import PreEstimator from './PreEstimator';
 import { useAuth, AuthProvider } from './AuthContext';
 import Login from './Login';
 import Register from './Register';
@@ -235,8 +238,17 @@ const DEFAULT_SETTINGS = {
 // ─── Main App Content ──────────────────────────────────────────────────
 function AppContent() {
   const { token, logout } = useAuth();
-  const [tab, setTab] = useState("calc");
+  const [tab, setTab] = useState("dashboard");
   const [sharedCodeData, setSharedCodeData] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('boc_theme') || 'dark');
+  useEffect(() => {
+    localStorage.setItem('boc_theme', theme);
+    document.body.className = theme === 'light' ? 'theme-light' : '';
+  }, [theme]);
+  const handleTransferToCalc = (data) => {
+    setSharedCodeData(prev => ({ ...(prev || {}), ...data }));
+    setTab('calc');
+  };
   const navigate = useNavigate();
 
   const [settings, setSettings] = useState(() => {
