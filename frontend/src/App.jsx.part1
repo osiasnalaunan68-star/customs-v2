@@ -1,0 +1,153 @@
+// This is the beginning of the file – will be combined with part 2
+import React, { useState, useEffect } from 'react';
+import { useAuth, AuthProvider } from './AuthContext';
+import Login from './Login';
+import Register from './Register';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { API_BASE_URL, TARIFF_VERSION, LAST_UPDATED } from './config';
+
+// ─── THEME & DESIGN SYSTEM ───────────────────────────────────────────────
+const C = {
+  navy:   "#0A1628",
+  navyL:  "#112240",
+  blue:   "#1B4F9B",
+  gold:   "#C8972B",
+  goldL:  "#F0B429",
+  white:  "#F5F7FA",
+  muted:  "#8899AA",
+  border: "#1E3A5F",
+  green:  "#1A7F5A",
+  red:    "#B03A2E",
+  card:   "#0D1F3C",
+};
+
+const globalStyle = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0A0F1E;
+    color: #E8F0FE;
+    font-family: 'Inter', sans-serif;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,151,43,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,151,43,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #112240; }
+  ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 3px; }
+  input, select, textarea {
+    background: #112240;
+    border: 1px solid #1E3A5F;
+    color: #E8F0FE;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #C8972B;
+    box-shadow: 0 0 8px rgba(200,151,43,0.2);
+  }
+  button { cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s; }
+  button:hover { filter: brightness(1.1); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .card {
+    background: #111827;
+    border: 1px solid rgba(200,151,43,0.15);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: rgba(200,151,43,0.4);
+    box-shadow: 0 0 30px rgba(200,151,43,0.06);
+  }
+  .badge-gold {
+    background: #C8972B;
+    color: #0A0F1E;
+  }
+  .pill {
+    background: rgba(200,151,43,0.15);
+    color: #C8972B;
+    border: 1px solid rgba(200,151,43,0.3);
+  }
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr !important; }
+    .header { flex-direction: column; text-align: center; }
+    .card { padding: 12px; }
+  }
+`;
+
+const DEFAULT_SETTINGS = {
+  vatRate: 12,
+  bocProcessingFee: 250,
+  docStampFee: 265,
+  exchangeRate: 58.50,
+  customOverrides: {},
+};
+
+function Pill({ color, children }) {
+  return (
+    <span style={{
+      background: color + "22", color, border: `1px solid ${color}55`,
+      borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 600,
+      letterSpacing: "0.05em", textTransform: "uppercase",
+    }}>{children}</span>
+  );
+}
+
+function Card({ children, style }) {
+  return (
+    <div style={{
+      background: C.card, border: `1px solid ${C.border}`,
+      borderRadius: 10, padding: 20, ...style,
+    }}>{children}</div>
+  );
+}
+
+function SpeciesBadge({ species }) {
+  if (!species) return null;
+  return (
+    <span style={{
+      background: `${C.gold}22`, color: C.goldL,
+      border: `1px solid ${C.gold}55`,
+      borderRadius: 20, padding: "2px 10px", fontSize: 12,
+      fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4,
+    }}>
+      {species.emoji} {species.name}
+    </span>
+  );
+}
+
+// ─── Main App Content ──────────────────────────────────────────────────
+function AppContent() {
+  const { token, logout } = useAuth();
+  const [tab, setTab] = useState("calc");
+  const [sharedCodeData, setSharedCodeData] = useState(null);
+  const navigate = useNavigate();
+
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem("boc_app_settings");
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("boc_app_settings", JSON.stringify(settings));
+  }, [settings]);
+
+  const handleCodeTransfer = (code, rate, desc, path, species) => {
+    setSharedCodeData({ code, rate, desc, path, species });
+    setTab("calc");
+  };

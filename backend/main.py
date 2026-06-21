@@ -4,13 +4,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import os
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 import re
 from sqlalchemy.orm import Session
 
 from backend import parser
 from backend.auth import create_access_token, get_current_user, get_db
 from backend.models import User, SessionLocal
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 app = FastAPI(title="PH Customs Broker System API")
 
@@ -64,10 +65,7 @@ def build_hierarchical_path(item):
     return re.sub(r'\s+', ' ', path).strip()
 
 def get_entry_type(fob_usd: float) -> str:
-    if fob_usd <= 200:
-        return "informal"
-    else:
-        return "formal"
+    return "informal" if fob_usd <= 200 else "formal"
 
 # ─── Pydantic Models ──────────────────────────────────────────────────────
 class UserCreate(BaseModel):
@@ -180,167 +178,93 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
     desc = req.description.lower().strip()
     predictions = []
 
-    # ─── 1. CHAPTER 10 CEREALS / RICE ──────────────────────────────────
     if any(word in desc for word in ["rice", "arroz", "bigas", "palay", "wheat", "trigo", "corn", "mais", "barley", "cebada", "oats", "avena", "rye", "centeno"]):
         predictions.append({
-            "code": "1006.30.99",
-            "confidence": "95%",
-            "description": "Semi-milled or wholly milled rice",
+            "code": "1006.30.99", "confidence": "95%", "description": "Semi-milled or wholly milled rice",
             "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
-            "duty_rate": 35.0,
-            "rate": 35.0,
-            "rate_2026": 35.0,
-            "chapter": "Chapter 10: Cereals"
+            "duty_rate": 35.0, "rate": 35.0, "rate_2026": 35.0, "chapter": "Chapter 10: Cereals"
         })
-        predictions.append({
-            "code": "1006.20.90",
-            "confidence": "85%",
-            "description": "Husked (brown) rice",
-            "reasoning": "Alternative: husked rice.",
-            "duty_rate": 35.0,
-            "rate": 35.0,
-            "rate_2026": 35.0,
-            "chapter": "Chapter 10: Cereals"
-        })
-        predictions.append({
-            "code": "1006.40.90",
-            "confidence": "70%",
-            "description": "Broken rice",
-            "reasoning": "Alternative: broken rice.",
-            "duty_rate": 35.0,
-            "rate": 35.0,
-            "rate_2026": 35.0,
-            "chapter": "Chapter 10: Cereals"
-        })
-        return {"predictions": predictions[:3]}
+        return {"predictions": predictions}
 
-    # ─── 2. CHAPTER 8 FRUITS AND NUTS ────────────────────────────────
-    if any(word in desc for word in ["apple", "mango", "banana", "fruit", "prutas", "nut"]):
-        predictions.append({
-            "code": "0808.10.00",
-            "confidence": "92%",
-            "description": "Fresh fruit",
-            "reasoning": "Product identified as fresh fruit, classified under Chapter 8: Edible Fruit and Nuts.",
-            "duty_rate": 7.0,
-            "rate": 7.0,
-            "rate_2026": 7.0,
-            "chapter": "Chapter 08: Edible Fruit and Nuts"
-        })
-        predictions.append({
-            "code": "0804.50.21",
-            "confidence": "75%",
-            "description": "Mangoes, fresh",
-            "reasoning": "Alternative: mangoes.",
-            "duty_rate": 15.0,
-            "rate": 15.0,
-            "rate_2026": 15.0,
-            "chapter": "Chapter 08: Edible Fruit and Nuts"
-        })
-        return {"predictions": predictions[:3]}
-
-    # ─── 3. CHAPTER 1 LIVE ANIMALS (strict) ──────────────────────────
-    if any(word in desc for word in ["live", "buhay"]) and any(word in desc for word in ["animal", "hayop", "cattle", "baka", "horse", "kabayo", "pig", "baboy"]):
-        predictions.append({
-            "code": "0102.21.00",
-            "confidence": "85%",
-            "description": "Live bovine animals (pure-bred breeding animals)",
-            "reasoning": "Product identified as live animal, classified under Chapter 1.",
-            "duty_rate": 0.0,
-            "rate": 0.0,
-            "rate_2026": 0.0,
-            "chapter": "Chapter 01: Live animals"
-        })
-        predictions.append({
-            "code": "0101.21.00",
-            "confidence": "70%",
-            "description": "Live horses, pure-bred breeding animals",
-            "reasoning": "Alternative: live horses.",
-            "duty_rate": 3.0,
-            "rate": 3.0,
-            "rate_2026": 3.0,
-            "chapter": "Chapter 01: Live animals"
-        })
-        return {"predictions": predictions[:3]}
-
-    # ─── 4. DATABASE SCAN (full scan, up to 3 matches) ──────────────
-    for item in TARIFF_DATABASE:  # limit for performance
+    for item in TARIFF_DATABASE:
         if desc in item["description"].lower():
             r = item.get("rate_2026") or item.get("rate_2024") or 0
             predictions.append({
-                "code": item["code"],
-                "confidence": "60%",
-                "description": item["description"],
-                "reasoning": "Matched via keyword scan.",
-                "duty_rate": r,
-                "rate": r,
-                "rate_2026": r,
+                "code": item["code"], "confidence": "60%", "description": item["description"],
+                "reasoning": "Matched via keyword scan.", "duty_rate": r, "rate": r, "rate_2026": r,
                 "chapter": f"Chapter {item['code'][:2]}"
             })
             if len(predictions) >= 3:
                 break
 
-    # ─── 5. ABSOLUTE FALLBACK ────────────────────────────────────────
     if not predictions:
         predictions.append({
-            "code": "0000.00.00",
-            "confidence": "Low",
-            "description": "Unclassified",
+            "code": "0000.00.00", "confidence": "Low", "description": "Unclassified",
             "reasoning": "No specific match. Please refine description.",
-            "duty_rate": 0.0,
-            "rate": 0.0,
-            "rate_2026": 0.0,
-            "chapter": "Unknown"
+            "duty_rate": 0.0, "rate": 0.0, "rate_2026": 0.0, "chapter": "Unknown"
         })
-
     return {"predictions": predictions[:3]}
 
 @app.post("/calculator/compute-boc-taxes")
 def compute_boc_taxes(req: CustomsCalculationRequest):
     try:
-        # STEP 1: Rule-Based Insurance Premium Allocation (2% General / 4% Dangerous)
         insurance_multiplier = 0.04 if req.is_dangerous_goods else 0.02
-        insurance_foreign = req.fob_fca_value * insurance_multiplier
+        insurance_foreign = req.fob_fca_value * insurance_multiplier if req.insurance_cost == 0 else req.insurance_cost
 
-        # STEP 2: Aggregate Total Dutiable Value (FOB + Freight + Insurance)
-        total_dutiable_foreign = req.fob_fca_value + req.freight_cost + insurance_foreign + req.insurance_cost
-
-        # STEP 3: Currency Normalization to Philippine Peso (PHP)
+        total_dutiable_foreign = req.fob_fca_value + req.freight_cost + insurance_foreign
         total_dutiable_php = total_dutiable_foreign * req.exchange_rate
-
-        # STEP 4: Customs Duty Computation
         customs_duty_php = total_dutiable_php * (req.rate_of_duty / 100.0)
 
-        # STEP 5: Fixed Government Statutory Fees (BIR & BOC Mandated Stamps)
         bir_doc_stamp = 30.00
         customs_doc_stamp = 100.00
 
-        # STEP 6: Sequential Landed Cost Derivation
         total_landed_cost = (
-            total_dutiable_php +
-            customs_duty_php +
-            req.excise_tax +
-            req.brokerage_fee +
-            req.import_processing_fee +
-            customs_doc_stamp +
-            bir_doc_stamp
+            total_dutiable_php + customs_duty_php + req.excise_tax +
+            req.brokerage_fee + req.import_processing_fee + customs_doc_stamp + bir_doc_stamp
         )
-
-        # STEP 7: Value Added Tax Evaluation (12% of Integrated Landed Cost)
         vat_php = total_landed_cost * 0.12
+        total_tax_payable = customs_duty_php + vat_php + req.excise_tax + req.import_processing_fee + bir_doc_stamp + customs_doc_stamp
 
-        # STEP 8: Grand Total Tax Payable to Bureau of Customs
-        total_tax_payable = (
-            customs_duty_php +
-            vat_php +
-            req.excise_tax +
-            req.import_processing_fee +
-            bir_doc_stamp +
-            customs_doc_stamp
-        )
+        # MODULE 1: Legal Justification Engine
+        entry_type = get_entry_type(req.fob_fca_value)
+        if entry_type == "informal":
+            legal_clause = "Section 400, CMTA: De Minimis Importations value under PHP 10,000 exempt from basic duty."
+            customs_duty_php = 0.0
+            total_landed_cost = total_dutiable_php + req.excise_tax + req.brokerage_fee + req.import_processing_fee + customs_doc_stamp + bir_doc_stamp
+            vat_php = total_landed_cost * 0.12
+            total_tax_payable = vat_php + req.excise_tax + req.import_processing_fee + bir_doc_stamp + customs_doc_stamp
+        else:
+            legal_clause = "Section 401, CMTA: Formal Entry guidelines subject to full assessment workflows."
+
+        # MODULE 2: Capital Volatility Buffer (+1.5% PHP buffer variance)
+        buffered_exchange_rate = req.exchange_rate * 1.015
+        buffered_dutiable_php = total_dutiable_foreign * buffered_exchange_rate
+        buffered_duty = buffered_dutiable_php * (req.rate_of_duty / 100.0)
+        if entry_type == "informal": buffered_duty = 0.0
+        buffered_landed_cost = buffered_dutiable_php + buffered_duty + req.excise_tax + req.brokerage_fee + req.import_processing_fee + customs_doc_stamp + bir_doc_stamp
+        buffered_vat = buffered_landed_cost * 0.12
+        buffered_total_tax = buffered_duty + buffered_vat + req.excise_tax + req.import_processing_fee + bir_doc_stamp + customs_doc_stamp
+        volatility_buffer_php = buffered_total_tax - total_tax_payable
+
+        # MODULE 3: Post-Clearance Audit Risk Profiler
+        risk_score = 10
+        risk_triggers = []
+        if req.rate_of_duty > 20:
+            risk_score += 30
+            risk_triggers.append("High Tariffs Line Item Match")
+        if req.fob_fca_value > 50000:
+            risk_score += 25
+            risk_triggers.append("High Commercial Value Valuation Target")
+        if req.is_dangerous_goods:
+            risk_score += 35
+            risk_triggers.append("Controlled/Hazardous Commodity Pathway")
+        
+        risk_level = "LOW" if risk_score < 40 else "MEDIUM" if risk_score < 70 else "CRITICAL"
 
         return {
             "status": "success",
-            "entry_type": get_entry_type(req.fob_fca_value),
+            "entry_type": entry_type,
+            "legal_justification": legal_clause,
             "valuation": {
                 "insurance_foreign": round(insurance_foreign, 2),
                 "dutiable_value_foreign": round(total_dutiable_foreign, 2),
@@ -353,6 +277,15 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
                 "customs_doc_stamp": customs_doc_stamp,
                 "total_landed_cost": round(total_landed_cost, 2),
                 "total_tax_payable": round(total_tax_payable, 2)
+            },
+            "volatility_buffer": {
+                "suggested_buffer_php": round(volatility_buffer_php, 2),
+                "buffered_total_tax_php": round(buffered_total_tax, 2)
+            },
+            "risk_profile": {
+                "score": risk_score,
+                "level": risk_level,
+                "triggers": risk_triggers
             }
         }
     except Exception as e:
@@ -362,19 +295,9 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
 def home():
     return {"status": "online", "records_loaded": len(TARIFF_DATABASE)}
 
-# ─── Debug Endpoint ──────────────────────────────────────────────────────
-
-
-
 @app.get("/debug")
 def debug_info():
     try:
-        records = len(TARIFF_DATABASE) if isinstance(TARIFF_DATABASE, list) else 0
-        sample = TARIFF_DATABASE[:3] if records > 0 else []
-        return {
-            "records": records,
-            "sample": sample,
-            "anthropic_key_set": bool(ANTHROPIC_API_KEY)
-        }
+        return {"records": len(TARIFF_DATABASE), "anthropic_key_set": bool(ANTHROPIC_API_KEY)}
     except Exception as e:
         return {"error": str(e), "records": 0}
