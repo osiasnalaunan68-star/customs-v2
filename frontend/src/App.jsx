@@ -1341,9 +1341,12 @@ const handleAIClassify = (code, description) => {
   ];
 
   const VIEWS = {
+    dashboard: <DashboardTab token={token} history={history} setTab={setTab} settings={settings} />,
     lookup: <HSLookup />,
     calc: <InteractiveCalc key="calc" />,
+    estimator: <PreEstimator onTransferToCalc={handleTransferToCalc} />,
     ai: <AIClassifier />,
+    tracker: <ShipmentTracker />,
     settings: <CustomsSettings />,
     history: <HistoryTab />,
   };
