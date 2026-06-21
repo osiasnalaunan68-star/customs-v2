@@ -1328,8 +1328,9 @@ const handleAIClassify = (code, description) => {
     { id: "history",   label: "📜 History" },
   ];
 
-  const VIEWS = {                                                                                                                                 lookup: <HSLookup />,
-    calc: <InteractiveCalc />,
+  const VIEWS = {
+    lookup: <HSLookup />,
+    calc: <InteractiveCalc key="calc" />,
     ai: <AIClassifier />,
     settings: <CustomsSettings />,
     history: <HistoryTab />,
