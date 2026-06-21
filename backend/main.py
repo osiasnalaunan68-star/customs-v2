@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import os
 import re
+import httpx
 from sqlalchemy.orm import Session
 
 from backend import parser
@@ -15,7 +16,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 app = FastAPI(title="PH Customs Broker System API")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -87,7 +87,7 @@ class CustomsCalculationRequest(BaseModel):
     import_processing_fee: float = 0.0
     ahtn_code: str = "0000.00.00"
 
-# ─── Authentication Endpoints ─────────────────────────────────────────────
+# ─── Auth Endpoints ───────────────────────────────────────────────────────
 @app.post("/register", status_code=201)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == user.email).first()
@@ -112,7 +112,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# ─── Protected Tariff Endpoints ───────────────────────────────────────────
+# ─── Tariff Endpoints ─────────────────────────────────────────────────────
 @app.get("/search")
 def search_tariff(
     q: str = Query(..., min_length=2),
@@ -131,6 +131,8 @@ def search_tariff(
             item_copy = item.copy()
             item_copy["hierarchical_path"] = build_hierarchical_path(item)
             item_copy["species"] = get_species_info(item["code"])
+            # Always expose rate_2026 as the primary rate
+            item_copy["rate"] = item.get("rate_2026", 0)
             results.append(item_copy)
             if len(results) >= limit:
                 break
@@ -170,28 +172,86 @@ def get_chapter_details(ch_num: int, current_user: User = Depends(get_current_us
         copy = item.copy()
         copy["hierarchical_path"] = build_hierarchical_path(item)
         copy["species"] = get_species_info(item["code"])
+        copy["rate"] = item.get("rate_2026", 0)
         enhanced.append(copy)
     return {"items": enhanced}
 
+# ─── AI Classifier ────────────────────────────────────────────────────────
 @app.post("/classify")
-def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
-    desc = req.description.lower().strip()
+async def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_current_user)):
+    desc = req.description.strip()
+    if not desc:
+        raise HTTPException(status_code=400, detail="Description is required")
+
+    # Build tariff context: top 80 entries as reference sample
+    sample_entries = TARIFF_DATABASE[:80]
+    tariff_context = "\n".join(
+        f"{item['code']} | {item['description']} | {item.get('rate_2026', 0)}%"
+        for item in sample_entries
+    )
+
+    system_prompt = """You are an expert Philippine customs classifier using AHTN 2022 and CMTA (RA 10863).
+Given a cargo description, return exactly 3 HS code predictions as JSON array.
+Each prediction must have: code, description, confidence, reasoning, duty_rate, chapter.
+Respond ONLY with a raw JSON array. No markdown, no explanation, no backticks."""
+
+    user_prompt = f"""Classify this cargo: "{desc}"
+
+Reference tariff entries (AHTN 2022):
+{tariff_context}
+
+Return JSON array of 3 predictions:
+[
+  {{
+    "code": "XXXX.XX.XX",
+    "description": "tariff description",
+    "confidence": "High/Medium/Low",
+    "reasoning": "brief explanation referencing AHTN/CMTA",
+    "duty_rate": 0.0,
+    "chapter": "Chapter XX: Title"
+  }}
+]"""
+
+    # Try AI classification first
+    if ANTHROPIC_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 1000,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": user_prompt}],
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    raw = data["content"][0]["text"].strip()
+                    raw = re.sub(r"```json|```", "", raw).strip()
+                    predictions = eval(raw) if raw.startswith("[") else []
+                    if predictions:
+                        return {"predictions": predictions[:3], "source": "ai"}
+        except Exception as e:
+            print(f"AI classify error: {e}")
+
+    # Fallback: keyword search
+    desc_lower = desc.lower()
     predictions = []
-
-    if any(word in desc for word in ["rice", "arroz", "bigas", "palay", "wheat", "trigo", "corn", "mais", "barley", "cebada", "oats", "avena", "rye", "centeno"]):
-        predictions.append({
-            "code": "1006.30.99", "confidence": "95%", "description": "Semi-milled or wholly milled rice",
-            "reasoning": "Product identified as rice, classified under Chapter 10: Cereals.",
-            "duty_rate": 35.0, "rate": 35.0, "rate_2026": 35.0, "chapter": "Chapter 10: Cereals"
-        })
-        return {"predictions": predictions}
-
     for item in TARIFF_DATABASE:
-        if desc in item["description"].lower():
-            r = item.get("rate_2026") or item.get("rate_2024") or 0
+        if any(word in item["description"].lower() for word in desc_lower.split()):
+            r = item.get("rate_2026", 0)
             predictions.append({
-                "code": item["code"], "confidence": "60%", "description": item["description"],
-                "reasoning": "Matched via keyword scan.", "duty_rate": r, "rate": r, "rate_2026": r,
+                "code": item["code"],
+                "confidence": "Low",
+                "description": item["description"],
+                "reasoning": "Keyword fallback match (AI unavailable).",
+                "duty_rate": r,
                 "chapter": f"Chapter {item['code'][:2]}"
             })
             if len(predictions) >= 3:
@@ -199,12 +259,17 @@ def classify_goods(req: ClassificationRequest, current_user: User = Depends(get_
 
     if not predictions:
         predictions.append({
-            "code": "0000.00.00", "confidence": "Low", "description": "Unclassified",
-            "reasoning": "No specific match. Please refine description.",
-            "duty_rate": 0.0, "rate": 0.0, "rate_2026": 0.0, "chapter": "Unknown"
+            "code": "0000.00.00",
+            "confidence": "Low",
+            "description": "Unclassified",
+            "reasoning": "No match found. Please refine description.",
+            "duty_rate": 0.0,
+            "chapter": "Unknown"
         })
-    return {"predictions": predictions[:3]}
 
+    return {"predictions": predictions[:3], "source": "keyword"}
+
+# ─── Calculator ───────────────────────────────────────────────────────────
 @app.post("/calculator/compute-boc-taxes")
 def compute_boc_taxes(req: CustomsCalculationRequest):
     try:
@@ -225,7 +290,6 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
         vat_php = total_landed_cost * 0.12
         total_tax_payable = customs_duty_php + vat_php + req.excise_tax + req.import_processing_fee + bir_doc_stamp + customs_doc_stamp
 
-        # MODULE 1: Legal Justification Engine
         entry_type = get_entry_type(req.fob_fca_value)
         if entry_type == "informal":
             legal_clause = "Section 400, CMTA: De Minimis Importations value under PHP 10,000 exempt from basic duty."
@@ -236,17 +300,16 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
         else:
             legal_clause = "Section 401, CMTA: Formal Entry guidelines subject to full assessment workflows."
 
-        # MODULE 2: Capital Volatility Buffer (+1.5% PHP buffer variance)
         buffered_exchange_rate = req.exchange_rate * 1.015
         buffered_dutiable_php = total_dutiable_foreign * buffered_exchange_rate
         buffered_duty = buffered_dutiable_php * (req.rate_of_duty / 100.0)
-        if entry_type == "informal": buffered_duty = 0.0
+        if entry_type == "informal":
+            buffered_duty = 0.0
         buffered_landed_cost = buffered_dutiable_php + buffered_duty + req.excise_tax + req.brokerage_fee + req.import_processing_fee + customs_doc_stamp + bir_doc_stamp
         buffered_vat = buffered_landed_cost * 0.12
         buffered_total_tax = buffered_duty + buffered_vat + req.excise_tax + req.import_processing_fee + bir_doc_stamp + customs_doc_stamp
         volatility_buffer_php = buffered_total_tax - total_tax_payable
 
-        # MODULE 3: Post-Clearance Audit Risk Profiler
         risk_score = 10
         risk_triggers = []
         if req.rate_of_duty > 20:
@@ -258,7 +321,7 @@ def compute_boc_taxes(req: CustomsCalculationRequest):
         if req.is_dangerous_goods:
             risk_score += 35
             risk_triggers.append("Controlled/Hazardous Commodity Pathway")
-        
+
         risk_level = "LOW" if risk_score < 40 else "MEDIUM" if risk_score < 70 else "CRITICAL"
 
         return {
@@ -297,7 +360,4 @@ def home():
 
 @app.get("/debug")
 def debug_info():
-    try:
-        return {"records": len(TARIFF_DATABASE), "anthropic_key_set": bool(ANTHROPIC_API_KEY)}
-    except Exception as e:
-        return {"error": str(e), "records": 0}
+    return {"records": len(TARIFF_DATABASE), "anthropic_key_set": bool(ANTHROPIC_API_KEY)}
