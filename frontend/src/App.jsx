@@ -486,6 +486,9 @@ export default function App() {
         </div>
         <div style={{ flex: 1, maxWidth: 1200, margin: "0 auto", width: "100%", padding: "24px" }}>{VIEWS[tab]}</div>
       </div>
+              <button className="theme-toggle" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} title="Toggle dark/light mode">
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
     </>
   );
 }

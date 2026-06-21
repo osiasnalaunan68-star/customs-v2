@@ -19,3 +19,5 @@ frontend/.env
 .DS_Store
 .env
 customs.db
+all_code.txt
+patch_app.sh
