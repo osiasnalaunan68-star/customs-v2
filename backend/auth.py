@@ -1,13 +1,14 @@
 import jwt
+import os
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from backend.models import User, SessionLocal
 
-SECRET_KEY = "your-very-secret-key-change-in-production"  # TODO: use env variable
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-prod-please")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

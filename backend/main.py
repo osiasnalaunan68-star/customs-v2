@@ -361,3 +361,4 @@ def home():
 @app.get("/debug")
 def debug_info():
     return {"records": len(TARIFF_DATABASE), "anthropic_key_set": bool(ANTHROPIC_API_KEY)}
+
