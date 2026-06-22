@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = "http://localhost:8000";
+const API = "https://customs-ph-webservice.onrender.com";
 
 // ─── THEME & COLOR PALETTE ───────────────────────────────────────────────
 const C = {
@@ -42,6 +42,7 @@ const TABS = [
   { id: "ai",        label: "🤖 AI Classifier" },
     { id: "tracker",   label: "🚢 Tracker" },
   { id: "browser",   label: "📚 Tariff Browser" },
+  { id: "estimator", label: "⚡ Estimator" },
   { id: "settings",  label: "⚙️ Customs Settings" },
 ];
 
@@ -77,6 +78,7 @@ const DEFAULT_SETTINGS = {
 export default function App() {
   const [tab, setTab] = useState("lookup");
   const [sharedCodeData, setSharedCodeData] = useState(null);
+  const [theme, setTheme] = useState("dark");
   
   // Persistent Regulatory State (Simulating local configuration persistence)
   const [settings, setSettings] = useState(() => {
@@ -456,10 +458,13 @@ export default function App() {
   }
 
   const VIEWS = {
+    dashboard: <DashboardTab setTab={setTab} settings={settings} history={[]} token={""} />,
     lookup:    <HSLookup />,
     calc:      <DutyCalc />,
     ai:        <AIClassifier />,
     browser:   <TariffBrowser />,
+    estimator: <PreEstimator onTransferToCalc={(d)=>{setSharedCodeData(d);setTab("calc");}} />,
+    tracker:   <ShipmentTracker />,
     settings:  <CustomsSettings />,
   };
 
