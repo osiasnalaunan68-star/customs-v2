@@ -36,9 +36,11 @@ const globalStyle = `
 `;
 
 const TABS = [
-  { id: "lookup",    label: "🔍 HS Lookup" },
+  { id: "dashboard", label: "🏠 Dashboard" },
+    { id: "lookup",    label: "🔍 HS Lookup" },
   { id: "calc",      label: "🧮 Duty Calculator" },
   { id: "ai",        label: "🤖 AI Classifier" },
+    { id: "tracker",   label: "🚢 Tracker" },
   { id: "browser",   label: "📚 Tariff Browser" },
   { id: "settings",  label: "⚙️ Customs Settings" },
 ];
